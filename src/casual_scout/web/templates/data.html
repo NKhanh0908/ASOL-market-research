@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Dữ liệu thị trường — {{ current_market.name }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h2 style="font-size: 1.25rem; font-weight: 700;">Top 100 Free Casual Games — {{ current_market.name }}</h2>
+      <div class="notice">
+        <span class="badge badge-complete">Casual theo Apple</span>
+        <span style="margin-left: 0.5rem;">⚠️ Không có số lượt tải</span>
+        {% if current_market.source_status == 'unverified' %}
+          <span class="badge badge-failed" style="margin-left: 0.5rem;">Nguồn chưa xác minh</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <form method="POST" action="/runs" style="display: flex; gap: 0.5rem;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="country" value="{{ country }}">
+      <input type="hidden" name="request_key" value="manual-{{ country }}-{{ now_key }}">
+      <button type="submit" class="btn">⚡ Thu thập ngay</button>
+    </form>
+  </div>
+
+  <div style="display: flex; gap: 1rem; margin-top: 1.25rem; align-items: center; flex-wrap: wrap;">
+    <div class="form-group">
+      <label for="country_select" style="font-size: 0.875rem; color: var(--text-muted);">Thị trường:</label>
+      <select id="country_select" onchange="location.href='/?country=' + this.value;">
+        {% for m in markets %}
+          <option value="{{ m.country }}" {% if m.country == country or (current_market and m.country == current_market.country) %}selected{% endif %}>
+            {{ m.name }} ({{ m.country | upper }}) {% if m.source_status == 'unverified' %}[Unverified]{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% if snapshots %}
+      <div class="form-group">
+        <label for="snapshot_select" style="font-size: 0.875rem; color: var(--text-muted);">Bản chụp:</label>
+        <select id="snapshot_select" onchange="location.href='/?country={{ country }}&snapshot_id=' + this.value;">
+          {% for s in snapshots %}
+            <option value="{{ s.id }}" {% if selected_snapshot and selected_snapshot.id == s.id %}selected{% endif %}>
+              {{ s.observed_at_vn }} ({{ s.quality }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if selected_snapshot %}
+    <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-muted);">
+      <span>Thời điểm quan sát: <strong>{{ selected_snapshot.observed_at_vn }}</strong></span>
+      {% if selected_snapshot.source_updated_vn %}
+        <span style="margin-left: 1rem;">Nguồn cập nhật: <strong>{{ selected_snapshot.source_updated_vn }}</strong></span>
+      {% endif %}
+      {% if selected_snapshot.raw_hash %}
+        <span style="margin-left: 1rem;"><a href="/evidence/{{ selected_snapshot.raw_hash }}" style="color: var(--primary);">Tải raw evidence (JSON)</a></span>
+      {% endif %}
+      <span style="margin-left: 1rem;"><a href="/export/csv?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}{% if selected_signal_filter %}&signal={{ selected_signal_filter }}{% endif %}" style="color: var(--primary);">📥 Tải CSV Phân Tích</a></span>
+    </div>
+
+    <!-- Quick Filter Tabs -->
+    <div class="filter-tabs">
+      <a href="/data?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}"
+         class="filter-tab {% if not selected_signal_filter %}active{% endif %}">
+        Tất cả <span class="count-badge">{{ counts.all }}</span>
+      </a>
+      <a href="/data?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=fast_risers"
+         class="filter-tab filter-tab-fast-riser {% if selected_signal_filter in ('fast_risers', 'fast_riser', 'FAST_RISER') %}active{% endif %}">
+        🚀 Tăng nhanh <span class="count-badge">{{ counts.fast_risers }}</span>
+      </a>
+      <a href="/data?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=new_entries"
+         class="filter-tab filter-tab-new-entry {% if selected_signal_filter in ('new_entries', 'new_entry', 'NEW_ENTRY') %}active{% endif %}">
+        ✨ Mới vào Top <span class="count-badge">{{ counts.new_entries }}</span>
+      </a>
+      <a href="/data?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=falling"
+         class="filter-tab filter-tab-falling {% if selected_signal_filter in ('falling', 'FALLING') %}active{% endif %}">
+        📉 Giảm hạng <span class="count-badge">{{ counts.falling }}</span>
+      </a>
+      <a href="/data?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=steady"
+         class="filter-tab filter-tab-steady {% if selected_signal_filter in ('steady', 'STEADY') %}active{% endif %}">
+        ⚖️ Ổn định <span class="count-badge">{{ counts.steady }}</span>
+      </a>
+    </div>
+  {% endif %}
+
+</div>
+
+{% if entries %}
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th class="rank">#</th>
+            <th>Game / Ứng dụng</th>
+            <th>Biến động & Xu hướng</th>
+            <th>Cơ chế & Thể loại</th>
+            <th>Độ phủ ASEAN+</th>
+            <th>Đánh giá</th>
+            <th>Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in entries %}
+            <tr>
+              <td class="rank">{{ e.rank }}</td>
+              <td>
+                <div style="display: flex; align-items: center;">
+                  {% if e.icon_url %}
+                    <img src="{{ e.icon_url }}" alt="" class="app-icon" loading="lazy">
+                  {% endif %}
+                  <div>
+                    <a href="/games/{{ country }}/{{ e.app_id }}{% if selected_snapshot %}?snapshot_id={{ selected_snapshot.id }}{% endif %}" style="color: var(--text); font-weight: 600; text-decoration: none;">
+                      {{ e.name }}
+                    </a>
+                    <div style="color: var(--text-muted); font-size: 0.75rem;">
+                      {{ e.developer or "—" }}
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                  <div>
+                    <span class="badge badge-{{ e.signal or 'STEADY' }}">{{ e.signal or 'STEADY' }}</span>
+                  </div>
+                  <div style="font-size: 0.8rem;">
+                    {% if e.signal == 'NEW_ENTRY' %}
+                      <span class="delta-new">NEW ✨</span>
+                    {% elif e.delta_1d is not none %}
+                      {% if e.delta_1d > 0 %}
+                        <span class="delta-up">1D: +{{ e.delta_1d }} ↗</span>
+                      {% elif e.delta_1d < 0 %}
+                        <span class="delta-down">1D: {{ e.delta_1d }} ↘</span>
+                      {% else %}
+                        <span class="delta-none">1D: 0</span>
+                      {% endif %}
+                    {% else %}
+                      <span class="delta-none">1D: —</span>
+                    {% endif %}
+
+                    {% if e.delta_3d is not none %}
+                      <span style="margin-left: 0.35rem; color: var(--text-muted); font-size: 0.75rem;">
+                        (3D: {% if e.delta_3d > 0 %}+{% endif %}{{ e.delta_3d }})
+                      </span>
+                    {% endif %}
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                  <div>
+                    <span class="badge badge-mechanic">{{ e.mechanic or "Other" }}</span>
+                    <span class="badge badge-conf-{{ e.mechanic_confidence or 'low' }}">{{ e.mechanic_confidence or 'low' }}</span>
+                  </div>
+                  <div>
+                    <span class="badge badge-subgenre">{{ e.subgenre or "Casual" }}</span>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="badge badge-cross-market" title="Thị trường: {{ (e.cross_markets or [country]) | join(', ') }}">
+                  🌐 {{ e.cross_market_count or 1 }} thị trường
+                </span>
+              </td>
+              <td style="font-size: 0.875rem; color: var(--text-muted);">{{ e.rating_display }}</td>
+              <td>
+                <div style="display: flex; gap: 0.35rem;">
+                  <a href="/games/{{ country }}/{{ e.app_id }}{% if selected_snapshot %}?snapshot_id={{ selected_snapshot.id }}{% endif %}" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                    Chi tiết
+                  </a>
+                  {% if e.store_url %}
+                    <a href="{{ e.store_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                      Store ↗
+                    </a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% else %}
+  <div class="card empty-state">
+    <h3>Không tìm thấy game nào phù hợp với bộ lọc</h3>
+    <p style="margin-top: 0.5rem;"><a href="/data?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}" style="color: var(--primary);">Xem tất cả game</a></p>
+  </div>
+{% endif %}
+{% endblock %}

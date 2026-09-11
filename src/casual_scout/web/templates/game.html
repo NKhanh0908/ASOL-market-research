@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}{{ metadata.name or entry.name or "Chi tiết Game" }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap;">
+    {% if entry.icon_url %}
+      <img src="{{ entry.icon_url }}" alt="" style="width: 80px; height: 80px; border-radius: 16px; border: 1px solid var(--surface-border);">
+    {% endif %}
+
+    <div style="flex: 1;">
+      <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+        <h2 style="font-size: 1.5rem; font-weight: 700;">{{ metadata.name or entry.name }}</h2>
+        {% if analytics.signal %}
+          <span class="badge badge-{{ analytics.signal }}">{{ analytics.signal }}</span>
+        {% endif %}
+      </div>
+      <div style="color: var(--text-muted); margin-top: 0.25rem;">
+        <span>Nhà phát triển: <strong>{{ metadata.developer or entry.developer or "—" }}</strong></span>
+        <span style="margin-left: 1rem;">Thể loại: <strong>{{ analytics.subgenre or metadata.primary_genre or "Casual" }}</strong></span>
+        {% if metadata.average_rating is not none %}
+          <span style="margin-left: 1rem;">Đánh giá: <strong>{{ metadata.average_rating }}★ ({{ metadata.rating_count }} lượt)</strong></span>
+        {% endif %}
+      </div>
+
+      <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        {% if entry.store_url or metadata.store_url %}
+          <a href="{{ entry.store_url or metadata.store_url }}" target="_blank" rel="noopener noreferrer" class="btn">
+            Mở trên App Store ↗
+          </a>
+        {% endif %}
+        <a href="/data?country={{ country }}{% if snapshot_id %}&snapshot_id={{ snapshot_id }}{% endif %}" class="btn btn-secondary">
+          ← Quay lại bảng xếp hạng
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Classification Evidence Box -->
+<div class="card">
+  <div class="card-title">🔍 Bằng chứng phân loại (Classification Evidence)</div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; font-size: 0.9rem;">
+    <div style="background: rgba(0,0,0,0.2); padding: 0.75rem; border-radius: 0.375rem; border: 1px solid var(--surface-border);">
+      <div style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">Cơ chế chính (Mechanic)</div>
+      <div style="font-size: 1.1rem; font-weight: 700; color: #60a5fa; margin-top: 0.25rem;">
+        {{ analytics.mechanic or "Other / Casual" }}
+      </div>
+      <div style="margin-top: 0.25rem;">
+        <span class="badge badge-conf-{{ analytics.mechanic_confidence or 'unknown' }}">Độ tin cậy: {{ analytics.mechanic_confidence or 'unknown' }}</span>
+      </div>
+    </div>
+
+    <div style="background: rgba(0,0,0,0.2); padding: 0.75rem; border-radius: 0.375rem; border: 1px solid var(--surface-border);">
+      <div style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">Thể loại phụ (Subgenre)</div>
+      <div style="font-size: 1.1rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">
+        {{ analytics.subgenre or "Casual" }}
+      </div>
+      <div style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.25rem;">
+        Nguồn Apple: {{ metadata.genres | join(', ') if metadata.genres else "Casual" }}
+      </div>
+    </div>
+
+    <div style="background: rgba(0,0,0,0.2); padding: 0.75rem; border-radius: 0.375rem; border: 1px solid var(--surface-border);">
+      <div style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">Độ phủ ASEAN+ (Cross-Market)</div>
+      <div style="font-size: 1.1rem; font-weight: 700; color: #facc15; margin-top: 0.25rem;">
+        {{ analytics.cross_market_count or 1 }} / 11 thị trường
+      </div>
+      <div style="margin-top: 0.35rem; display: flex; gap: 0.25rem; flex-wrap: wrap;">
+        {% for m in analytics.cross_markets or [country] %}
+          <span class="badge badge-cross-market">{{ m | upper }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% if analytics.mechanic_evidence %}
+    <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 0.375rem; font-size: 0.85rem;">
+      <span style="font-weight: 600; color: #60a5fa;">Từ khóa khớp (Evidence):</span>
+      <code style="color: var(--text); margin-left: 0.5rem;">{{ analytics.mechanic_evidence }}</code>
+    </div>
+  {% endif %}
+
+  {% if analytics.signal_reasons %}
+    <div style="margin-top: 0.5rem; padding: 0.75rem; background: rgba(0, 0, 0, 0.2); border-radius: 0.375rem; font-size: 0.85rem;">
+      <span style="font-weight: 600; color: var(--text-muted);">Lý do phân loại tín hiệu:</span>
+      <ul style="margin-left: 1.5rem; margin-top: 0.25rem; color: var(--text);">
+        {% for r in analytics.signal_reasons %}
+          <li>{{ r }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Rank History (14 Days) -->
+<div class="card">
+  <div class="card-title">📈 Lịch sử thứ hạng (14 ngày gần nhất)</div>
+  {% if rank_history %}
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Ngày (UTC)</th>
+            <th class="rank">Thứ hạng</th>
+            <th>Biến động 1D</th>
+            <th>Biến động 3D</th>
+            <th>Biến động 7D</th>
+            <th>Tín hiệu</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in rank_history %}
+            <tr>
+              <td><code>{{ h.date }}</code></td>
+              <td class="rank"><strong>#{{ h.current_rank }}</strong></td>
+              <td>
+                {% if h.delta_1d is not none %}
+                  {% if h.delta_1d > 0 %}
+                    <span class="delta-up">+{{ h.delta_1d }} ↗</span>
+                  {% elif h.delta_1d < 0 %}
+                    <span class="delta-down">{{ h.delta_1d }} ↘</span>
+                  {% else %}
+                    <span class="delta-none">0</span>
+                  {% endif %}
+                {% else %}
+                  <span class="delta-none">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if h.delta_3d is not none %}
+                  {% if h.delta_3d > 0 %}
+                    <span class="delta-up">+{{ h.delta_3d }}</span>
+                  {% elif h.delta_3d < 0 %}
+                    <span class="delta-down">{{ h.delta_3d }}</span>
+                  {% else %}
+                    <span class="delta-none">0</span>
+                  {% endif %}
+                {% else %}
+                  <span class="delta-none">—</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if h.delta_7d is not none %}
+                  {% if h.delta_7d > 0 %}
+                    <span class="delta-up">+{{ h.delta_7d }}</span>
+                  {% elif h.delta_7d < 0 %}
+                    <span class="delta-down">{{ h.delta_7d }}</span>
+                  {% else %}
+                    <span class="delta-none">0</span>
+                  {% endif %}
+                {% else %}
+                  <span class="delta-none">—</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge badge-{{ h.signal }}">{{ h.signal }}</span>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p style="color: var(--text-muted); font-size: 0.9rem;">Chưa có dữ liệu lịch sử ranking cho game này.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-title">Mô tả ứng dụng (Nguồn Apple Store)</div>
+  <div style="white-space: pre-line; font-size: 0.9rem; line-height: 1.6; color: var(--text-muted); max-height: 400px; overflow-y: auto; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.375rem;">
+    {{ metadata.description or "Không có thông tin mô tả chi tiết." }}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Metadata & Raw Evidence</div>
+  <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.875rem;">
+    <div>App ID: <code style="color: var(--primary);">{{ app_id }}</code></div>
+    <div>Quốc gia: <strong>{{ country | upper }}</strong></div>
+    <div>Thời điểm lấy metadata: <strong>{{ metadata.fetched_at_vn or "—" }}</strong></div>
+    {% if metadata.raw_hash %}
+      <div>Raw Evidence Hash: <a href="/evidence/{{ metadata.raw_hash }}" style="color: var(--primary); font-family: monospace;">{{ metadata.raw_hash }}</a></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

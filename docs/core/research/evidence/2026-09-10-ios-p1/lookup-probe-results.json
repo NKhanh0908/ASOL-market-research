@@ -1,0 +1,399 @@
+﻿[
+    {
+        "market":  "vn",
+        "url":  "https://itunes.apple.com/lookup?id=6757412443,1150288115\u0026country=vn",
+        "observedAtUtc":  "2026-09-10T04:03:21.7815515Z",
+        "status":  200,
+        "elapsedMs":  416,
+        "requestedIds":  [
+                             "6757412443",
+                             "1150288115"
+                         ],
+        "count":  2,
+        "returnedIds":  [
+                            6757412443,
+                            1150288115
+                        ],
+        "genres":  [
+                       "Games",
+                       "Entertainment",
+                       "Casual",
+                       "Puzzle",
+                       "Games",
+                       "Action",
+                       "Strategy"
+                   ],
+        "primaryGenres":  [
+                              "Games",
+                              "Games"
+                          ],
+        "hasDescription":  2,
+        "hasRating":  2,
+        "storeUrls":  [
+                          "https://apps.apple.com/vn/app/block-blast/id6757412443?uo=4",
+                          "https://apps.apple.com/vn/app/garena-li%C3%AAn-qu%C3%A2n-mobile/id1150288115?uo=4"
+                      ],
+        "error":  null
+    },
+    {
+        "market":  "us",
+        "url":  "https://itunes.apple.com/lookup?id=6761760135,6752672568\u0026country=us",
+        "observedAtUtc":  "2026-09-10T04:03:26.2805406Z",
+        "status":  200,
+        "elapsedMs":  343,
+        "requestedIds":  [
+                             "6761760135",
+                             "6752672568"
+                         ],
+        "count":  2,
+        "returnedIds":  [
+                            6761760135,
+                            6752672568
+                        ],
+        "genres":  [
+                       "Games",
+                       "Casual",
+                       "Puzzle",
+                       "Games",
+                       "Puzzle",
+                       "Casual"
+                   ],
+        "primaryGenres":  [
+                              "Games",
+                              "Games"
+                          ],
+        "hasDescription":  2,
+        "hasRating":  2,
+        "storeUrls":  [
+                          "https://apps.apple.com/us/app/meowdoku/id6761760135?uo=4",
+                          "https://apps.apple.com/us/app/block-out-color-sort-puzzle/id6752672568?uo=4"
+                      ],
+        "error":  null
+    },
+    {
+        "market":  "bn",
+        "url":  "https://itunes.apple.com/lookup?id=1160056295,431946152\u0026country=bn",
+        "observedAtUtc":  "2026-09-10T04:03:30.7524339Z",
+        "status":  200,
+        "elapsedMs":  428,
+        "requestedIds":  [
+                             "1160056295",
+                             "431946152"
+                         ],
+        "count":  2,
+        "returnedIds":  [
+                            1160056295,
+                            431946152
+                        ],
+        "genres":  [
+                       "Games",
+                       "Action",
+                       "Strategy",
+                       "Entertainment",
+                       "Games",
+                       "Entertainment",
+                       "Action",
+                       "Adventure"
+                   ],
+        "primaryGenres":  [
+                              "Games",
+                              "Games"
+                          ],
+        "hasDescription":  2,
+        "hasRating":  2,
+        "storeUrls":  [
+                          "https://apps.apple.com/bn/app/mobile-legends-bang-bang/id1160056295?uo=4",
+                          "https://apps.apple.com/bn/app/roblox/id431946152?uo=4"
+                      ],
+        "error":  null
+    },
+    {
+        "market":  "kh",
+        "url":  "https://itunes.apple.com/lookup?id=431946152,1300146617\u0026country=kh",
+        "observedAtUtc":  "2026-09-10T04:03:35.1972272Z",
+        "status":  200,
+        "elapsedMs":  397,
+        "requestedIds":  [
+                             "431946152",
+                             "1300146617"
+                         ],
+        "count":  2,
+        "returnedIds":  [
+                            431946152,
+                            1300146617
+                        ],
+        "genres":  [
+                       "Games",
+                       "Entertainment",
+                       "Action",
+                       "Adventure",
+                       "Games",
+                       "Adventure",
+                       "Action"
+                   ],
+        "primaryGenres":  [
+                              "Games",
+                              "Games"
+                          ],
+        "hasDescription":  2,
+        "hasRating":  2,
+        "storeUrls":  [
+                          "https://apps.apple.com/kh/app/roblox/id431946152?uo=4",
+                          "https://apps.apple.com/kh/app/free-fire-9th-anniversary/id1300146617?uo=4"
+                      ],
+        "error":  null
+    },
+    {
+        "market":  "id",
+        "url":  "https://itunes.apple.com/lookup?id=1160056295,1617391485\u0026country=id",
+        "observedAtUtc":  "2026-09-10T04:03:39.6246608Z",
+        "status":  200,
+        "elapsedMs":  371,
+        "requestedIds":  [
+                             "1160056295",
+                             "1617391485"
+                         ],
+        "count":  2,
+        "returnedIds":  [
+                            1160056295,
+                            1617391485
+                        ],
+        "genres":  [
+                       "Games",
+                       "Action",
+                       "Strategy",
+                       "Entertainment",
+                       "Games",
+                       "Puzzle",
+                       "Casual",
+                       "Entertainment"
+                   ],
+        "primaryGenres":  [
+                              "Games",
+                              "Games"
+                          ],
+        "hasDescription":  2,
+        "hasRating":  2,
+        "storeUrls":  [
+                          "https://apps.apple.com/id/app/mobile-legends-bang-bang/id1160056295?uo=4",
+                          "https://apps.apple.com/id/app/block-blast/id1617391485?uo=4"
+                      ],
+        "error":  null
+    },
+    {
+        "market":  "la",
+        "url":  "https://itunes.apple.com/lookup?id=1300146617,1160056295\u0026country=la",
+        "observedAtUtc":  "2026-09-10T04:03:44.1237965Z",
+        "status":  200,
+        "elapsedMs":  455,
+        "requestedIds":  [
+                             "1300146617",
+                             "1160056295"
+                         ],
+        "count":  2,
+        "returnedIds":  [
+                            1300146617,
+                            1160056295
+                        ],
+        "genres":  [
+                       "Games",
+                       "Adventure",
+                       "Action",
+                       "Games",
+                       "Action",
+                       "Strategy",
+                       "Entertainment"
+                   ],
+        "primaryGenres":  [
+                              "Games",
+                              "Games"
+                          ],
+        "hasDescription":  2,
+        "hasRating":  2,
+        "storeUrls":  [
+                          "https://apps.apple.com/la/app/free-fire-9th-anniversary/id1300146617?uo=4",
+                          "https://apps.apple.com/la/app/mobile-legends-bang-bang/id1160056295?uo=4"
+                      ],
+        "error":  null
+    },
+    {
+        "market":  "my",
+        "url":  "https://itunes.apple.com/lookup?id=6752672568,431946152\u0026country=my",
+        "observedAtUtc":  "2026-09-10T04:03:48.5135249Z",
+        "status":  200,
+        "elapsedMs":  326,
+        "requestedIds":  [
+                             "6752672568",
+                             "431946152"
+                         ],
+        "count":  2,
+        "returnedIds":  [
+                            6752672568,
+                            431946152
+                        ],
+        "genres":  [
+                       "Games",
+                       "Puzzle",
+                       "Casual",
+                       "Games",
+                       "Entertainment",
+                       "Action",
+                       "Adventure"
+                   ],
+        "primaryGenres":  [
+                              "Games",
+                              "Games"
+                          ],
+        "hasDescription":  2,
+        "hasRating":  2,
+        "storeUrls":  [
+                          "https://apps.apple.com/my/app/block-out-color-sort-puzzle/id6752672568?uo=4",
+                          "https://apps.apple.com/my/app/roblox/id431946152?uo=4"
+                      ],
+        "error":  null
+    },
+    {
+        "market":  "mm",
+        "url":  "https://itunes.apple.com/lookup?id=1160056295,1330123889\u0026country=mm",
+        "observedAtUtc":  "2026-09-10T04:03:52.8943767Z",
+        "status":  200,
+        "elapsedMs":  318,
+        "requestedIds":  [
+                             "1160056295",
+                             "1330123889"
+                         ],
+        "count":  2,
+        "returnedIds":  [
+                            1160056295,
+                            1330123889
+                        ],
+        "genres":  [
+                       "Games",
+                       "Action",
+                       "Strategy",
+                       "Entertainment",
+                       "Games",
+                       "Action",
+                       "Strategy"
+                   ],
+        "primaryGenres":  [
+                              "Games",
+                              "Games"
+                          ],
+        "hasDescription":  2,
+        "hasRating":  2,
+        "storeUrls":  [
+                          "https://apps.apple.com/mm/app/mobile-legends-bang-bang/id1160056295?uo=4",
+                          "https://apps.apple.com/mm/app/pubg-mobile/id1330123889?uo=4"
+                      ],
+        "error":  null
+    },
+    {
+        "market":  "ph",
+        "url":  "https://itunes.apple.com/lookup?id=431946152,1160056295\u0026country=ph",
+        "observedAtUtc":  "2026-09-10T04:03:57.3236828Z",
+        "status":  200,
+        "elapsedMs":  386,
+        "requestedIds":  [
+                             "431946152",
+                             "1160056295"
+                         ],
+        "count":  2,
+        "returnedIds":  [
+                            431946152,
+                            1160056295
+                        ],
+        "genres":  [
+                       "Games",
+                       "Entertainment",
+                       "Action",
+                       "Adventure",
+                       "Games",
+                       "Action",
+                       "Strategy",
+                       "Entertainment"
+                   ],
+        "primaryGenres":  [
+                              "Games",
+                              "Games"
+                          ],
+        "hasDescription":  2,
+        "hasRating":  2,
+        "storeUrls":  [
+                          "https://apps.apple.com/ph/app/roblox/id431946152?uo=4",
+                          "https://apps.apple.com/ph/app/mobile-legends-bang-bang/id1160056295?uo=4"
+                      ],
+        "error":  null
+    },
+    {
+        "market":  "sg",
+        "url":  "https://itunes.apple.com/lookup?id=1480516829,1300146617\u0026country=sg",
+        "observedAtUtc":  "2026-09-10T04:04:01.7786273Z",
+        "status":  200,
+        "elapsedMs":  386,
+        "requestedIds":  [
+                             "1480516829",
+                             "1300146617"
+                         ],
+        "count":  2,
+        "returnedIds":  [
+                            1480516829,
+                            1300146617
+                        ],
+        "genres":  [
+                       "Games",
+                       "Adventure",
+                       "Action",
+                       "Games",
+                       "Adventure",
+                       "Action"
+                   ],
+        "primaryGenres":  [
+                              "Games",
+                              "Games"
+                          ],
+        "hasDescription":  2,
+        "hasRating":  2,
+        "storeUrls":  [
+                          "https://apps.apple.com/sg/app/free-fire-max/id1480516829?uo=4",
+                          "https://apps.apple.com/sg/app/free-fire-9th-anniversary/id1300146617?uo=4"
+                      ],
+        "error":  null
+    },
+    {
+        "market":  "th",
+        "url":  "https://itunes.apple.com/lookup?id=1597760047,431946152\u0026country=th",
+        "observedAtUtc":  "2026-09-10T04:04:06.2009119Z",
+        "status":  200,
+        "elapsedMs":  364,
+        "requestedIds":  [
+                             "1597760047",
+                             "431946152"
+                         ],
+        "count":  2,
+        "returnedIds":  [
+                            1597760047,
+                            431946152
+                        ],
+        "genres":  [
+                       "Games",
+                       "Simulation",
+                       "Role-Playing",
+                       "Games",
+                       "Entertainment",
+                       "Action",
+                       "Adventure"
+                   ],
+        "primaryGenres":  [
+                              "Games",
+                              "Games"
+                          ],
+        "hasDescription":  2,
+        "hasRating":  2,
+        "storeUrls":  [
+                          "https://apps.apple.com/th/app/onestate-rp-role-play-online/id1597760047?uo=4",
+                          "https://apps.apple.com/th/app/roblox/id431946152?uo=4"
+                      ],
+        "error":  null
+    }
+]

@@ -1,0 +1,584 @@
+﻿[
+    {
+        "market":  "vn",
+        "url":  "https://itunes.apple.com/lookup?id=6757412443,6759763476,6757736102,6478063606,553834731,1089336971,6768707304,1494694347,6759152250,1357967682,6746743297,6756482832,1528287521,6504188939,6498920694,1588009371,1638139403,6757832779,6448104157,6764201639\u0026country=vn",
+        "observedAtUtc":  "2026-09-10T04:07:35.0147302Z",
+        "status":  200,
+        "requestedCount":  20,
+        "returnedCount":  20,
+        "missingIds":  [
+
+                       ],
+        "casualGenreCount":  20,
+        "genrePairs":  [
+                           {
+                               "trackId":  6757412443,
+                               "genres":  [
+                                              "Games",
+                                              "Entertainment",
+                                              "Casual",
+                                              "Puzzle"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "6016",
+                                                "7003",
+                                                "7012"
+                                            ]
+                           },
+                           {
+                               "trackId":  6759763476,
+                               "genres":  [
+                                              "Games",
+                                              "Casual",
+                                              "Puzzle"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7003",
+                                                "7012"
+                                            ]
+                           },
+                           {
+                               "trackId":  6757736102,
+                               "genres":  [
+                                              "Games",
+                                              "Casual",
+                                              "Simulation"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7003",
+                                                "7015"
+                                            ]
+                           },
+                           {
+                               "trackId":  6478063606,
+                               "genres":  [
+                                              "Games",
+                                              "Casual",
+                                              "Puzzle",
+                                              "Entertainment"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7003",
+                                                "7012",
+                                                "6016"
+                                            ]
+                           },
+                           {
+                               "trackId":  553834731,
+                               "genres":  [
+                                              "Games",
+                                              "Entertainment",
+                                              "Puzzle",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "6016",
+                                                "7012",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  1089336971,
+                               "genres":  [
+                                              "Games",
+                                              "Action",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7001",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6768707304,
+                               "genres":  [
+                                              "Games",
+                                              "Entertainment",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "6016",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  1494694347,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Entertainment",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "6016",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6759152250,
+                               "genres":  [
+                                              "Games",
+                                              "Casual",
+                                              "Puzzle",
+                                              "Entertainment"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7003",
+                                                "7012",
+                                                "6016"
+                                            ]
+                           },
+                           {
+                               "trackId":  1357967682,
+                               "genres":  [
+                                              "Games",
+                                              "Entertainment",
+                                              "Action",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "6016",
+                                                "7001",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6746743297,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6756482832,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Casual",
+                                              "Entertainment"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "7003",
+                                                "6016"
+                                            ]
+                           },
+                           {
+                               "trackId":  1528287521,
+                               "genres":  [
+                                              "Games",
+                                              "Board",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7004",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6504188939,
+                               "genres":  [
+                                              "Games",
+                                              "Casual",
+                                              "Action"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7003",
+                                                "7001"
+                                            ]
+                           },
+                           {
+                               "trackId":  6498920694,
+                               "genres":  [
+                                              "Games",
+                                              "Simulation",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7015",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  1588009371,
+                               "genres":  [
+                                              "Games",
+                                              "Family",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7009",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  1638139403,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Entertainment",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "6016",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6757832779,
+                               "genres":  [
+                                              "Games",
+                                              "Entertainment",
+                                              "Casual",
+                                              "Puzzle"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "6016",
+                                                "7003",
+                                                "7012"
+                                            ]
+                           },
+                           {
+                               "trackId":  6448104157,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6764201639,
+                               "genres":  [
+                                              "Games",
+                                              "Casual",
+                                              "Simulation"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7003",
+                                                "7015"
+                                            ]
+                           }
+                       ]
+    },
+    {
+        "market":  "us",
+        "url":  "https://itunes.apple.com/lookup?id=6761760135,6752672568,6499209744,6759763476,1617391485,638689075,6746743297,6780891673,6754464806,1623318294,6758326278,6761757565,1482155847,1608987929,6748397500,512939461,1638139403,6471045672,553834731,6756482832\u0026country=us",
+        "observedAtUtc":  "2026-09-10T04:07:40.2361862Z",
+        "status":  200,
+        "requestedCount":  20,
+        "returnedCount":  20,
+        "missingIds":  [
+
+                       ],
+        "casualGenreCount":  20,
+        "genrePairs":  [
+                           {
+                               "trackId":  6761760135,
+                               "genres":  [
+                                              "Games",
+                                              "Casual",
+                                              "Puzzle"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7003",
+                                                "7012"
+                                            ]
+                           },
+                           {
+                               "trackId":  6752672568,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6499209744,
+                               "genres":  [
+                                              "Games",
+                                              "Casual",
+                                              "Puzzle"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7003",
+                                                "7012"
+                                            ]
+                           },
+                           {
+                               "trackId":  6759763476,
+                               "genres":  [
+                                              "Games",
+                                              "Casual",
+                                              "Puzzle"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7003",
+                                                "7012"
+                                            ]
+                           },
+                           {
+                               "trackId":  1617391485,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Casual",
+                                              "Entertainment"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "7003",
+                                                "6016"
+                                            ]
+                           },
+                           {
+                               "trackId":  638689075,
+                               "genres":  [
+                                              "Games",
+                                              "Entertainment",
+                                              "Puzzle",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "6016",
+                                                "7012",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6746743297,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6780891673,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6754464806,
+                               "genres":  [
+                                              "Games",
+                                              "Casual",
+                                              "Simulation"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7003",
+                                                "7015"
+                                            ]
+                           },
+                           {
+                               "trackId":  1623318294,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6758326278,
+                               "genres":  [
+                                              "Games",
+                                              "Entertainment",
+                                              "Casual",
+                                              "Puzzle"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "6016",
+                                                "7003",
+                                                "7012"
+                                            ]
+                           },
+                           {
+                               "trackId":  6761757565,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  1482155847,
+                               "genres":  [
+                                              "Games",
+                                              "Casual",
+                                              "Puzzle"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7003",
+                                                "7012"
+                                            ]
+                           },
+                           {
+                               "trackId":  1608987929,
+                               "genres":  [
+                                              "Games",
+                                              "Entertainment",
+                                              "Strategy",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "6016",
+                                                "7017",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6748397500,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  512939461,
+                               "genres":  [
+                                              "Games",
+                                              "Action",
+                                              "Casual",
+                                              "Entertainment"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7001",
+                                                "7003",
+                                                "6016"
+                                            ]
+                           },
+                           {
+                               "trackId":  1638139403,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Entertainment",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "6016",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6471045672,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  553834731,
+                               "genres":  [
+                                              "Games",
+                                              "Entertainment",
+                                              "Puzzle",
+                                              "Casual"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "6016",
+                                                "7012",
+                                                "7003"
+                                            ]
+                           },
+                           {
+                               "trackId":  6756482832,
+                               "genres":  [
+                                              "Games",
+                                              "Puzzle",
+                                              "Casual",
+                                              "Entertainment"
+                                          ],
+                               "genreIds":  [
+                                                "6014",
+                                                "7012",
+                                                "7003",
+                                                "6016"
+                                            ]
+                           }
+                       ]
+    }
+]

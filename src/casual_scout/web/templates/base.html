@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Casual Scout{% endblock %} — iOS Market Research</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <a href="/" class="logo">🎮 Casual Scout <span style="font-size: 0.8rem; font-weight: 400; color: var(--text-muted);">(P3 Ready)</span></a>
+      <nav>
+        <a href="/dashboard" class="{% if active_tab == 'dashboard' %}active{% endif %}">📊 Dashboard</a>
+        <a href="/shortlist" class="{% if active_tab == 'shortlist' %}active{% endif %}">⭐ Shortlist</a>
+        <a href="/data" class="{% if active_tab == 'data' %}active{% endif %}">🗂️ Dữ liệu thị trường</a>
+        <a href="/runs" class="{% if active_tab == 'runs' %}active{% endif %}">⚙️ Lần thu thập</a>
+      </nav>
+    </header>
+
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer style="margin-top: 3rem; text-align: center; font-size: 0.75rem; color: var(--text-muted);">
+      <p>Casual Scout P3 — Nghiên cứu thị trường Casual Game ASEAN + US. Chuẩn hoá múi giờ Việt Nam (UTC+7 / Asia/Ho_Chi_Minh).</p>
+    </footer>
+  </div>
+</body>
+</html>
