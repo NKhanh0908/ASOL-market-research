@@ -42,12 +42,12 @@ class Collector:
             with closing(self.repo._connect()) as conn:
                 market_runs = conn.execute(
                     """
-                    SELECT mr.id, mr.chart_id, c.country, m.source_status, m.source_note
+                    SELECT mr.id, mr.chart_id, c.country, c.collection, c.genre, c.depth, c.version, m.source_status, m.source_note
                     FROM market_runs mr
                     JOIN charts c ON c.id = mr.chart_id
                     JOIN markets m ON m.country = c.country
                     WHERE mr.run_id = ?
-                    ORDER BY c.country ASC
+                    ORDER BY c.country ASC, c.collection ASC
                     """,
                     (run_id,),
                 ).fetchall()
@@ -73,7 +73,13 @@ class Collector:
                         )
                     continue
 
-                chart = Chart(country)
+                chart = Chart(
+                    country=country,
+                    collection=str(mr["collection"]),
+                    genre=str(mr["genre"]),
+                    depth=int(mr["depth"]),
+                    version=int(mr["version"]),
+                )
                 http_result, parsed = self.provider.fetch_chart(chart)
 
                 snapshot_id: str | None = None

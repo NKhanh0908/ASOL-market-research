@@ -33,12 +33,19 @@ class JobService:
     def __init__(self, repo: Repository) -> None:
         self.repo = repo
 
-    def submit(self, trigger: str, countries: list[str], request_key: str) -> str:
+    def submit(
+        self,
+        trigger: str,
+        countries: list[str],
+        request_key: str,
+        chart_types: list[str] | None = None,
+    ) -> str:
         if not countries:
             raise ValueError("countries list must not be empty")
 
         now_dt = datetime.now(UTC)
         now = _utc_text(now_dt)
+        feeds = chart_types or ["top-free"]
 
         with self.repo._write_connection() as conn:
             existing_key = conn.execute(
@@ -63,13 +70,14 @@ class JobService:
             )
 
             for country in countries:
-                chart = Chart(country.lower())
-                chart_endpoint = (
-                    f"https://itunes.apple.com/{chart.country}/rss/{chart.collection}/"
-                    f"limit={chart.depth}/genre={chart.genre}/json"
-                )
-                chart_id = self.repo._ensure_chart(conn, chart, chart_endpoint)
-                self.repo._ensure_market_run(conn, run_id, chart_id, now_dt)
+                for feed in feeds:
+                    chart = Chart(country.lower(), feed_type=feed)
+                    chart_endpoint = (
+                        f"https://itunes.apple.com/{chart.country}/rss/{chart.collection}/"
+                        f"limit={chart.depth}/genre={chart.genre}/json"
+                    )
+                    chart_id = self.repo._ensure_chart(conn, chart, chart_endpoint)
+                    self.repo._ensure_market_run(conn, run_id, chart_id, now_dt)
 
             return run_id
 

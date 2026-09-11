@@ -90,6 +90,9 @@ class AppleProvider:
         self._settings = settings
         self._http = http or HttpClient(settings)
 
+    def chart_url(self, chart: Chart) -> str:
+        return _chart_url(chart)
+
     def fetch_chart(self, chart: Chart) -> tuple[HttpResult, ParsedChart]:
         url = _chart_url(chart)
         result = self._http.get(url)
@@ -110,8 +113,13 @@ def _chart_url(chart: Chart) -> str:
     if not _is_supported_chart(chart):
         raise ValueError("unsupported Apple chart configuration")
     country = _country(chart.country)
+    collection = (
+        "topgrossingapplications"
+        if chart.feed_type == "top-grossing" or chart.collection == "topgrossingapplications"
+        else "topfreeapplications"
+    )
     return (
-        f"https://itunes.apple.com/{country}/rss/topfreeapplications/limit=100/genre=7003/json"
+        f"https://itunes.apple.com/{country}/rss/{collection}/limit={chart.depth}/genre={chart.genre}/json"
     )
 
 
@@ -127,7 +135,7 @@ def _chart_identity_issues(feed: dict, chart: Chart) -> list[str]:
     if not _is_supported_chart(chart):
         issues.append("unsupported Apple chart configuration")
     title = _label(feed.get("title"))
-    if title != "iTunes Store: Top Free Applications in Casual":
+    if not title or "casual" not in title.lower():
         issues.append("title does not identify the Casual chart")
 
     self_url = None
@@ -162,7 +170,7 @@ def _is_supported_chart(chart: Chart) -> bool:
     return (
         chart.provider == "apple"
         and chart.platform == "ios"
-        and chart.collection == "topfreeapplications"
+        and chart.collection in ("topfreeapplications", "topgrossingapplications")
         and chart.genre == "7003"
         and chart.depth == 100
         and chart.version == 1
