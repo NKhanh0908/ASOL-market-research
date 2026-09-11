@@ -7,6 +7,10 @@ from casual_scout.analysis.delta import (
     compute_cross_market_presence,
     compute_rank_deltas,
 )
+from casual_scout.analysis.monetization import (
+    classify_monetization_model,
+    compute_monetization_efficiency,
+)
 from casual_scout.analysis.signals import evaluate_signal
 from casual_scout.analysis.taxonomy import classify_app
 from casual_scout.storage import Repository
@@ -34,6 +38,8 @@ class AnalysisService:
             canonical = self.repository.get_canonical_snapshot(date_str, country)
             if canonical is None:
                 latest = self.repository.find_latest_complete_snapshot_for_date(
+                    date_str, country, collection="topfreeapplications"
+                ) or self.repository.find_latest_complete_snapshot_for_date(
                     date_str, country
                 )
                 if latest is not None:
@@ -66,6 +72,17 @@ class AnalysisService:
                 e['app_id']: e['rank'] for e in snap_data['entries']
             }
 
+            # Check for Top Grossing snapshot on same date/country
+            grossing_entries_map: dict[str, int] = {}
+            grossing_latest = self.repository.find_latest_complete_snapshot_for_date(
+                date_str, country, collection="topgrossingapplications"
+            )
+            if grossing_latest is not None:
+                grossing_snap = self.repository.get_snapshot(grossing_latest['id'])
+                grossing_entries_map = {
+                    e['app_id']: e['rank'] for e in grossing_snap['entries']
+                }
+
             past_snapshots: dict[int, dict[str, int]] = {}
             for days_ago in (1, 3, 7):
                 past_date_str = (
@@ -77,6 +94,8 @@ class AnalysisService:
                 if past_canonical is None:
                     past_latest = (
                         self.repository.find_latest_complete_snapshot_for_date(
+                            past_date_str, country, collection="topfreeapplications"
+                        ) or self.repository.find_latest_complete_snapshot_for_date(
                             past_date_str, country
                         )
                     )
@@ -109,6 +128,8 @@ class AnalysisService:
             for entry in snap_data['entries']:
                 app_id = entry['app_id']
                 current_rank = entry['rank']
+                free_rank = current_rank
+                grossing_rank = grossing_entries_map.get(app_id)
                 app_name = entry['name']
                 delta_info = deltas.get(app_id, {})
 
@@ -137,6 +158,19 @@ class AnalysisService:
                     genres=genres, title=app_name, description=description
                 )
 
+                price = meta.get('price', 0.0)
+                iap_list = meta.get('inAppPurchases') or meta.get('in_app_purchases') or []
+                monetization_model = classify_monetization_model(
+                    price=price,
+                    iap_list=iap_list,
+                    free_rank=free_rank,
+                    grossing_rank=grossing_rank,
+                )
+                monetization_efficiency_flag = compute_monetization_efficiency(
+                    free_rank=free_rank,
+                    grossing_rank=grossing_rank,
+                )
+
                 app_cross_markets = cross_presence.get(app_id, [country])
                 cross_count = len(app_cross_markets)
 
@@ -159,6 +193,10 @@ class AnalysisService:
                     'mechanic_confidence': taxonomy['confidence'],
                     'cross_market_count': cross_count,
                     'cross_markets': app_cross_markets,
+                    'grossing_rank': grossing_rank,
+                    'free_rank': free_rank,
+                    'monetization_model': monetization_model,
+                    'monetization_efficiency_flag': monetization_efficiency_flag,
                 })
 
             self.repository.save_daily_analytics(daily_records)

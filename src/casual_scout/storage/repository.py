@@ -526,26 +526,27 @@ class Repository:
             return dict(row)
 
     def find_latest_complete_snapshot_for_date(
-        self, date_str: str, country: str
+        self, date_str: str, country: str, collection: str | None = None
     ) -> dict[str, Any] | None:
-        """Find the latest complete snapshot observed on date_str (UTC YYYY-MM-DD) for country."""
+        """Find the latest complete snapshot observed on date_str (UTC YYYY-MM-DD) for country and optional collection."""
         country_norm = country.lower()
         day_start = f"{date_str}T00:00:00Z"
         day_end = f"{date_str}T23:59:59.999999Z"
+        query = """
+            SELECT snapshots.id, snapshots.observed_at
+            FROM snapshots
+            JOIN market_runs ON market_runs.id = snapshots.market_run_id
+            JOIN charts ON charts.id = market_runs.chart_id
+            WHERE charts.country = ? AND snapshots.quality = 'complete'
+              AND snapshots.observed_at >= ? AND snapshots.observed_at <= ?
+        """
+        params: list[Any] = [country_norm, day_start, day_end]
+        if collection:
+            query += " AND charts.collection = ?"
+            params.append(collection)
+        query += " ORDER BY snapshots.observed_at DESC, snapshots.id DESC LIMIT 1"
         with closing(self._connect()) as connection:
-            row = connection.execute(
-                """
-                SELECT snapshots.id, snapshots.observed_at
-                FROM snapshots
-                JOIN market_runs ON market_runs.id = snapshots.market_run_id
-                JOIN charts ON charts.id = market_runs.chart_id
-                WHERE charts.country = ? AND snapshots.quality = 'complete'
-                  AND snapshots.observed_at >= ? AND snapshots.observed_at <= ?
-                ORDER BY snapshots.observed_at DESC, snapshots.id DESC
-                LIMIT 1
-                """,
-                (country_norm, day_start, day_end),
-            ).fetchone()
+            row = connection.execute(query, params).fetchone()
             if row is None:
                 return None
             return {"id": str(row["id"]), "observed_at": row["observed_at"]}
