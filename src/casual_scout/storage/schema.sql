@@ -146,6 +146,9 @@ CREATE TABLE IF NOT EXISTS metadata_versions (
     store_url TEXT,
     price REAL,
     currency TEXT,
+    in_app_purchases_json TEXT DEFAULT '[]',
+    has_in_app_purchases INTEGER DEFAULT 0,
+    monetization_model TEXT DEFAULT 'UNKNOWN',
     values_json TEXT NOT NULL
 );
 
@@ -267,6 +270,10 @@ CREATE TABLE IF NOT EXISTS daily_rank_analytics (
     mechanic_confidence TEXT NOT NULL,
     cross_market_count INTEGER NOT NULL,
     cross_markets_json TEXT NOT NULL,
+    grossing_rank INTEGER,
+    free_rank INTEGER,
+    monetization_model TEXT,
+    monetization_efficiency_flag TEXT,
     created_at TEXT NOT NULL,
     UNIQUE(date, country, app_id)
 );

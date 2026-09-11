@@ -11,6 +11,15 @@ class Chart:
     genre: str = "7003"
     depth: int = 100
     version: int = 1
+    feed_type: str = "top-free"
+
+    def __post_init__(self):
+        if self.feed_type in ("top-grossing", "topgrossingapplications") or self.collection in ("topgrossingapplications", "top-grossing"):
+            object.__setattr__(self, "feed_type", "top-grossing")
+            object.__setattr__(self, "collection", "topgrossingapplications")
+        else:
+            object.__setattr__(self, "feed_type", "top-free")
+            object.__setattr__(self, "collection", "topfreeapplications")
 
 
 @dataclass(frozen=True, slots=True)

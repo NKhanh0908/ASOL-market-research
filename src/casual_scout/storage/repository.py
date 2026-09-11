@@ -62,6 +62,25 @@ class Repository:
         now = _utc_text(datetime.now(UTC))
         with closing(self._connect()) as connection:
             connection.executescript(schema)
+            # Idempotent column migrations for Phase 3.5
+            meta_cols = [r[1] for r in connection.execute("PRAGMA table_info(metadata_versions)").fetchall()]
+            if "in_app_purchases_json" not in meta_cols:
+                connection.execute("ALTER TABLE metadata_versions ADD COLUMN in_app_purchases_json TEXT DEFAULT '[]'")
+            if "has_in_app_purchases" not in meta_cols:
+                connection.execute("ALTER TABLE metadata_versions ADD COLUMN has_in_app_purchases INTEGER DEFAULT 0")
+            if "monetization_model" not in meta_cols:
+                connection.execute("ALTER TABLE metadata_versions ADD COLUMN monetization_model TEXT DEFAULT 'UNKNOWN'")
+
+            an_cols = [r[1] for r in connection.execute("PRAGMA table_info(daily_rank_analytics)").fetchall()]
+            if "grossing_rank" not in an_cols:
+                connection.execute("ALTER TABLE daily_rank_analytics ADD COLUMN grossing_rank INTEGER")
+            if "free_rank" not in an_cols:
+                connection.execute("ALTER TABLE daily_rank_analytics ADD COLUMN free_rank INTEGER")
+            if "monetization_model" not in an_cols:
+                connection.execute("ALTER TABLE daily_rank_analytics ADD COLUMN monetization_model TEXT")
+            if "monetization_efficiency_flag" not in an_cols:
+                connection.execute("ALTER TABLE daily_rank_analytics ADD COLUMN monetization_efficiency_flag TEXT")
+
             connection.executemany(
                 """
                 INSERT OR IGNORE INTO markets
@@ -306,15 +325,19 @@ class Repository:
 
                 version_id = _uuid()
                 genres = metadata.get("genres") or []
+                iap_list = metadata.get("inAppPurchases") or metadata.get("in_app_purchases") or []
+                has_iap = 1 if len(iap_list) > 0 or metadata.get("hasInAppPurchases") or metadata.get("has_in_app_purchases") else 0
+                monetization_model = metadata.get("monetization_model") or metadata.get("monetizationModel") or "UNKNOWN"
+
                 connection.execute(
                     """
                     INSERT INTO metadata_versions
                         (id, app_ref, provider, platform, country, app_id, fetched_at,
                          status, raw_hash, name, developer, primary_genre, genres_json,
                          description, average_rating, rating_count, store_url, price,
-                         currency, values_json)
+                         currency, in_app_purchases_json, has_in_app_purchases, monetization_model, values_json)
                     VALUES (?, ?, 'apple', 'ios', ?, ?, ?, 'complete', ?, ?, ?, ?, ?,
-                            ?, ?, ?, ?, ?, ?, ?)
+                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         version_id,
@@ -333,6 +356,9 @@ class Repository:
                         metadata.get("trackViewUrl"),
                         metadata.get("price"),
                         metadata.get("currency"),
+                        json.dumps(iap_list, ensure_ascii=False, sort_keys=True),
+                        has_iap,
+                        monetization_model,
                         json.dumps(metadata, ensure_ascii=False, sort_keys=True),
                     ),
                 )
@@ -554,8 +580,10 @@ class Repository:
                         rank_7d_ago, delta_7d,
                         signal, signal_reasons_json,
                         subgenre, mechanic, mechanic_evidence, mechanic_confidence,
-                        cross_market_count, cross_markets_json, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        cross_market_count, cross_markets_json,
+                        grossing_rank, free_rank, monetization_model, monetization_efficiency_flag,
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(date, country, app_id) DO UPDATE SET
                         current_rank = excluded.current_rank,
                         rank_1d_ago = excluded.rank_1d_ago,
@@ -572,6 +600,10 @@ class Repository:
                         mechanic_confidence = excluded.mechanic_confidence,
                         cross_market_count = excluded.cross_market_count,
                         cross_markets_json = excluded.cross_markets_json,
+                        grossing_rank = excluded.grossing_rank,
+                        free_rank = excluded.free_rank,
+                        monetization_model = excluded.monetization_model,
+                        monetization_efficiency_flag = excluded.monetization_efficiency_flag,
                         created_at = excluded.created_at
                     """,
                     (
@@ -594,6 +626,10 @@ class Repository:
                         rec.get("mechanic_confidence", "unknown"),
                         rec.get("cross_market_count", 1),
                         cross_markets,
+                        rec.get("grossing_rank"),
+                        rec.get("free_rank"),
+                        rec.get("monetization_model"),
+                        rec.get("monetization_efficiency_flag"),
                         created_at,
                     ),
                 )
@@ -609,7 +645,9 @@ class Repository:
                    rank_7d_ago, delta_7d,
                    signal, signal_reasons_json,
                    subgenre, mechanic, mechanic_evidence, mechanic_confidence,
-                   cross_market_count, cross_markets_json, created_at
+                   cross_market_count, cross_markets_json,
+                   grossing_rank, free_rank, monetization_model, monetization_efficiency_flag,
+                   created_at
             FROM daily_rank_analytics
             WHERE date = ? AND country = ?
         """
