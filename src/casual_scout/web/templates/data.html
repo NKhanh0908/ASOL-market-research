@@ -4,12 +4,30 @@
 
 {% block content %}
 <div class="card">
+  <!-- Chart Feed Type Switcher Tabs -->
+  <div style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;">
+    <a href="/data?country={{ country }}&feed_type=top-free"
+       class="btn {% if feed_type == 'top-free' %}btn-primary{% else %}btn-secondary{% endif %}"
+       style="padding: 0.5rem 1rem; text-decoration: none; font-weight: 600;">
+      🆓 Top Free (100)
+    </a>
+    <a href="/data?country={{ country }}&feed_type=top-grossing"
+       class="btn {% if feed_type == 'top-grossing' %}btn-primary{% else %}btn-secondary{% endif %}"
+       style="padding: 0.5rem 1rem; text-decoration: none; font-weight: 600;">
+      💰 Top Grossing (100)
+    </a>
+  </div>
+
   <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
     <div>
-      <h2 style="font-size: 1.25rem; font-weight: 700;">Top 100 Free Casual Games — {{ current_market.name }}</h2>
+      <h2 style="font-size: 1.25rem; font-weight: 700;">Top 100 {% if feed_type == 'top-grossing' %}Grossing{% else %}Free{% endif %} Casual Games — {{ current_market.name }}</h2>
       <div class="notice">
         <span class="badge badge-complete">Casual theo Apple</span>
-        <span style="margin-left: 0.5rem;">⚠️ Không có số lượt tải</span>
+        {% if feed_type == 'top-grossing' %}
+          <span style="margin-left: 0.5rem; color: #f59e0b; font-weight: 600;">💰 Doanh thu cao nhất (Top Grossing)</span>
+        {% else %}
+          <span style="margin-left: 0.5rem;">⚠️ Không có số lượt tải</span>
+        {% endif %}
         {% if current_market.source_status == 'unverified' %}
           <span class="badge badge-failed" style="margin-left: 0.5rem;">Nguồn chưa xác minh</span>
         {% endif %}
@@ -27,7 +45,7 @@
   <div style="display: flex; gap: 1rem; margin-top: 1.25rem; align-items: center; flex-wrap: wrap;">
     <div class="form-group">
       <label for="country_select" style="font-size: 0.875rem; color: var(--text-muted);">Thị trường:</label>
-      <select id="country_select" onchange="location.href='/?country=' + this.value;">
+      <select id="country_select" onchange="location.href='/?country=' + this.value + '&feed_type={{ feed_type }}';">
         {% for m in markets %}
           <option value="{{ m.country }}" {% if m.country == country or (current_market and m.country == current_market.country) %}selected{% endif %}>
             {{ m.name }} ({{ m.country | upper }}) {% if m.source_status == 'unverified' %}[Unverified]{% endif %}
@@ -39,7 +57,7 @@
     {% if snapshots %}
       <div class="form-group">
         <label for="snapshot_select" style="font-size: 0.875rem; color: var(--text-muted);">Bản chụp:</label>
-        <select id="snapshot_select" onchange="location.href='/?country={{ country }}&snapshot_id=' + this.value;">
+        <select id="snapshot_select" onchange="location.href='/?country={{ country }}&feed_type={{ feed_type }}&snapshot_id=' + this.value;">
           {% for s in snapshots %}
             <option value="{{ s.id }}" {% if selected_snapshot and selected_snapshot.id == s.id %}selected{% endif %}>
               {{ s.observed_at_vn }} ({{ s.quality }})
@@ -64,23 +82,23 @@
 
     <!-- Quick Filter Tabs -->
     <div class="filter-tabs">
-      <a href="/data?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}"
+      <a href="/data?country={{ country }}&feed_type={{ feed_type }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}"
          class="filter-tab {% if not selected_signal_filter %}active{% endif %}">
         Tất cả <span class="count-badge">{{ counts.all }}</span>
       </a>
-      <a href="/data?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=fast_risers"
+      <a href="/data?country={{ country }}&feed_type={{ feed_type }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=fast_risers"
          class="filter-tab filter-tab-fast-riser {% if selected_signal_filter in ('fast_risers', 'fast_riser', 'FAST_RISER') %}active{% endif %}">
         🚀 Tăng nhanh <span class="count-badge">{{ counts.fast_risers }}</span>
       </a>
-      <a href="/data?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=new_entries"
+      <a href="/data?country={{ country }}&feed_type={{ feed_type }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=new_entries"
          class="filter-tab filter-tab-new-entry {% if selected_signal_filter in ('new_entries', 'new_entry', 'NEW_ENTRY') %}active{% endif %}">
         ✨ Mới vào Top <span class="count-badge">{{ counts.new_entries }}</span>
       </a>
-      <a href="/data?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=falling"
+      <a href="/data?country={{ country }}&feed_type={{ feed_type }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=falling"
          class="filter-tab filter-tab-falling {% if selected_signal_filter in ('falling', 'FALLING') %}active{% endif %}">
         📉 Giảm hạng <span class="count-badge">{{ counts.falling }}</span>
       </a>
-      <a href="/data?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=steady"
+      <a href="/data?country={{ country }}&feed_type={{ feed_type }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=steady"
          class="filter-tab filter-tab-steady {% if selected_signal_filter in ('steady', 'STEADY') %}active{% endif %}">
         ⚖️ Ổn định <span class="count-badge">{{ counts.steady }}</span>
       </a>
@@ -99,6 +117,7 @@
             <th>Game / Ứng dụng</th>
             <th>Biến động & Xu hướng</th>
             <th>Cơ chế & Thể loại</th>
+            <th>Mô hình Kiếm tiền</th>
             <th>Độ phủ ASEAN+</th>
             <th>Đánh giá</th>
             <th>Thao tác</th>
@@ -160,6 +179,31 @@
                   <div>
                     <span class="badge badge-subgenre">{{ e.subgenre or "Casual" }}</span>
                   </div>
+                </div>
+              </td>
+              <td>
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                  <div>
+                    <span class="badge" style="font-size: 0.75rem; background: {% if e.monetization_model == 'HYBRID' %}#dbeafe; color: #1e40af;{% elif e.monetization_model == 'PURE_IAP' %}#fef3c7; color: #92400e;{% elif e.monetization_model == 'PAID_PREMIUM' %}#f3e8ff; color: #6b21a8;{% else %}#f1f5f9; color: #475569;{% endif %}">
+                      {{ e.monetization_model or 'PURE_ADS' }}
+                    </span>
+                  </div>
+                  {% if feed_type == 'top-free' and e.grossing_rank %}
+                    <div style="font-size: 0.75rem; color: #d97706; font-weight: 600;">
+                      💰 Grossing #{{ e.grossing_rank }}
+                    </div>
+                  {% elif feed_type == 'top-grossing' and e.free_rank %}
+                    <div style="font-size: 0.75rem; color: #2563eb; font-weight: 600;">
+                      🆓 Free #{{ e.free_rank }}
+                    </div>
+                  {% endif %}
+                  {% if e.monetization_efficiency_flag %}
+                    <div>
+                      <span class="badge" style="font-size: 0.7rem; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;">
+                        {{ e.monetization_efficiency_flag }}
+                      </span>
+                    </div>
+                  {% endif %}
                 </div>
               </td>
               <td>

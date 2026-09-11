@@ -86,6 +86,7 @@ def create_app(
     def index_view(
         request: Request,
         country: str = "vn",
+        feed_type: str = "top-free",
         snapshot_id: str | None = None,
         signal: str | None = None,
         date: str | None = None,
@@ -96,6 +97,7 @@ def create_app(
         data = get_data_view(
             repo,
             country=country,
+            feed_type=feed_type,
             snapshot_id=snapshot_id,
             signal=signal,
             date=date,
@@ -356,6 +358,16 @@ def create_app(
     def api_stats_summary(date: str | None = None, country: str = "all"):
         data = get_dashboard_view(repo, date_str=date, country=country)
         return data["summary"]
+
+    @app.get("/api/stats/monetization")
+    def api_stats_monetization(date: str | None = None, country: str = "all"):
+        data = get_dashboard_view(repo, date_str=date, country=country)
+        return {
+            "date": data["selected_date"],
+            "country": data["selected_country"],
+            "models_breakdown": data["summary"].get("monetization_distribution", {}).get("breakdown", {}),
+            "percentages": data["summary"].get("monetization_distribution", {}).get("percentages", {}),
+        }
 
     @app.get("/api/stats/heatmap")
     def api_stats_heatmap(date: str | None = None):

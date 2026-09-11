@@ -131,6 +131,7 @@
           <th style="padding: 0.75rem;">Điểm Cơ Hội</th>
           <th style="padding: 0.75rem;">Game</th>
           <th style="padding: 0.75rem;">Thể loại / Cơ chế</th>
+          <th style="padding: 0.75rem;">Mô hình & Doanh thu</th>
           <th style="padding: 0.75rem;">Thứ hạng & Tín hiệu</th>
           <th style="padding: 0.75rem;">Độ phủ khu vực</th>
           <th style="padding: 0.75rem; text-align: right;">Hành động</th>
@@ -158,6 +159,26 @@
           <td style="padding: 0.75rem;">
             <span style="padding: 0.2rem 0.5rem; background: #1e293b; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.75rem;">{{ item.subgenre or 'Casual' }}</span>
             <div style="margin-top: 0.25rem; font-size: 0.75rem; color: #38bdf8;">{{ item.mechanic }}</div>
+          </td>
+
+          <td style="padding: 0.75rem;">
+            <div>
+              <span class="badge" style="font-size: 0.75rem; background: {% if item.monetization_model == 'HYBRID' %}#dbeafe; color: #1e40af;{% elif item.monetization_model == 'PURE_IAP' %}#fef3c7; color: #92400e;{% elif item.monetization_model == 'PAID_PREMIUM' %}#f3e8ff; color: #6b21a8;{% else %}#f1f5f9; color: #475569;{% endif %}">
+                {{ item.monetization_model or 'PURE_ADS' }}
+              </span>
+            </div>
+            {% if item.grossing_rank %}
+              <div style="font-size: 0.75rem; color: #d97706; font-weight: 600; margin-top: 0.2rem;">
+                💰 Grossing #{{ item.grossing_rank }} (+{{ item.grossing_power }}đ)
+              </div>
+            {% endif %}
+            {% if item.monetization_efficiency_flag %}
+              <div style="margin-top: 0.2rem;">
+                <span class="badge" style="font-size: 0.65rem; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;">
+                  {{ item.monetization_efficiency_flag }}
+                </span>
+              </div>
+            {% endif %}
           </td>
 
           <td style="padding: 0.75rem;">

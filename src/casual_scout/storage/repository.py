@@ -689,7 +689,8 @@ class Repository:
                        rank_3d_ago, delta_3d,
                        rank_7d_ago, delta_7d,
                        signal, subgenre, mechanic, mechanic_confidence,
-                       cross_market_count
+                       cross_market_count,
+                       grossing_rank, free_rank, monetization_model, monetization_efficiency_flag
                 FROM daily_rank_analytics
                 WHERE app_id = ? AND country = ?
                 ORDER BY date DESC

@@ -94,6 +94,51 @@
   {% endif %}
 </div>
 
+<!-- Monetization & In-App Purchases Card -->
+<div class="card">
+  <div class="card-title">💰 Mô hình Kiếm tiền & Gói nạp (IAP)</div>
+  <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
+    <div>
+      <span class="badge" style="font-size: 0.85rem; padding: 0.35rem 0.75rem; background: {% if analytics.monetization_model == 'HYBRID' %}#dbeafe; color: #1e40af;{% elif analytics.monetization_model == 'PURE_IAP' %}#fef3c7; color: #92400e;{% elif analytics.monetization_model == 'PAID_PREMIUM' %}#f3e8ff; color: #6b21a8;{% else %}#f1f5f9; color: #475569;{% endif %}">
+        {{ analytics.monetization_model or metadata.monetization_model or 'PURE_ADS' }}
+      </span>
+    </div>
+    {% if metadata.price is not none %}
+      <div style="font-size: 0.9rem; color: var(--text-muted);">
+        Giá tải app: <strong>{% if metadata.price > 0 %}{{ metadata.price }} {{ metadata.currency or 'USD' }}{% else %}Miễn phí (Free){% endif %}</strong>
+      </div>
+    {% endif %}
+    {% if analytics.grossing_rank %}
+      <div style="font-size: 0.9rem; color: #d97706; font-weight: 600;">
+        💰 Doanh thu Top Grossing: #{{ analytics.grossing_rank }}
+      </div>
+    {% endif %}
+    {% if analytics.monetization_efficiency_flag %}
+      <div>
+        <span class="badge" style="font-size: 0.75rem; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;">
+          {{ analytics.monetization_efficiency_flag }}
+        </span>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if metadata.in_app_purchases %}
+    <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">Danh sách gói In-App Purchase (IAP):</div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;">
+      {% for iap in metadata.in_app_purchases %}
+        <div style="padding: 0.5rem; background: rgba(0,0,0,0.2); border: 1px solid var(--surface-border); border-radius: 6px; font-size: 0.85rem;">
+          <div style="font-weight: 600;">{{ iap.name or iap.title or "Gói IAP" }}</div>
+          <div style="color: #10b981; font-weight: 700; margin-top: 0.2rem;">
+            {{ iap.price_formatted or iap.formattedPrice or iap.price or "—" }}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">Không phát hiện gói IAP nào (Kiếm tiền chủ yếu qua quảng cáo trong game / IAA hoặc Free hoàn toàn).</p>
+  {% endif %}
+</div>
+
 <!-- Rank History (14 Days) -->
 <div class="card">
   <div class="card-title">📈 Lịch sử thứ hạng (14 ngày gần nhất)</div>
@@ -103,7 +148,8 @@
         <thead>
           <tr>
             <th>Ngày (UTC)</th>
-            <th class="rank">Thứ hạng</th>
+            <th class="rank">Thứ hạng Free</th>
+            <th>Thứ hạng Grossing</th>
             <th>Biến động 1D</th>
             <th>Biến động 3D</th>
             <th>Biến động 7D</th>
@@ -115,6 +161,13 @@
             <tr>
               <td><code>{{ h.date }}</code></td>
               <td class="rank"><strong>#{{ h.current_rank }}</strong></td>
+              <td>
+                {% if h.grossing_rank %}
+                  <strong style="color: #d97706;">#{{ h.grossing_rank }}</strong>
+                {% else %}
+                  <span style="color: var(--text-muted);">—</span>
+                {% endif %}
+              </td>
               <td>
                 {% if h.delta_1d is not none %}
                   {% if h.delta_1d > 0 %}

@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from casual_scout.analysis.monetization import classify_monetization_model
 from casual_scout.analysis.taxonomy import classify_app
 from casual_scout.models import Chart
 from casual_scout.stats.aggregator import (
@@ -45,18 +46,25 @@ def get_markets(repo: Repository) -> list[dict]:
 def get_data_view(
     repo: Repository,
     country: str = "vn",
+    feed_type: str = "top-free",
     snapshot_id: str | None = None,
     signal: str | None = None,
     date: str | None = None,
 ) -> dict:
     country = country.lower()
+    feed_type_norm = (
+        "top-grossing"
+        if feed_type in ("top-grossing", "topgrossingapplications", "grossing")
+        else "top-free"
+    )
+    collection = "topgrossingapplications" if feed_type_norm == "top-grossing" else "topfreeapplications"
     markets = get_markets(repo)
     current_market = next((m for m in markets if m["country"] == country), None)
     if current_market is None:
         country = "vn"
         current_market = next((m for m in markets if m["country"] == "vn"), None)
 
-    chart = Chart(country)
+    chart = Chart(country, feed_type=feed_type_norm)
 
     with closing(repo._connect()) as conn:
         snaps = conn.execute(
@@ -65,11 +73,11 @@ def get_data_view(
             FROM snapshots s
             JOIN market_runs mr ON mr.id = s.market_run_id
             JOIN charts c ON c.id = mr.chart_id
-            WHERE c.country = ?
+            WHERE c.country = ? AND c.collection = ?
             ORDER BY s.observed_at DESC
             LIMIT 50
             """,
-            (country,),
+            (country, collection),
         ).fetchall()
         snapshots_list = [
             {
@@ -114,10 +122,12 @@ def get_data_view(
             query = """
                 SELECT e.rank, e.app_id, e.name, e.store_url, e.icon_url, e.developer, e.source_genres_json,
                        mv.description, mv.genres_json, mv.average_rating, mv.rating_count,
+                       mv.price, mv.currency, mv.in_app_purchases_json, mv.has_in_app_purchases,
                        dra.delta_1d, dra.delta_3d, dra.delta_7d,
                        dra.signal, dra.signal_reasons_json,
                        dra.subgenre, dra.mechanic, dra.mechanic_evidence, dra.mechanic_confidence,
-                       dra.cross_market_count, dra.cross_markets_json
+                       dra.cross_market_count, dra.cross_markets_json,
+                       dra.grossing_rank, dra.free_rank, dra.monetization_model, dra.monetization_efficiency_flag
                 FROM entries e
                 LEFT JOIN snapshot_metadata sm ON sm.snapshot_id = e.snapshot_id AND sm.app_id = e.app_id
                 LEFT JOIN metadata_versions mv ON mv.id = sm.metadata_version_id
@@ -164,6 +174,23 @@ def get_data_view(
                 if row_dict.get("cross_market_count") is None:
                     row_dict["cross_market_count"] = 1
                     row_dict["cross_markets"] = [country]
+
+                # Monetization model fallback
+                if not row_dict.get("monetization_model") or row_dict.get("monetization_model") == "UNKNOWN":
+                    iap_list = []
+                    if row_dict.get("in_app_purchases_json"):
+                        try:
+                            iap_list = json.loads(row_dict["in_app_purchases_json"])
+                        except Exception:
+                            pass
+                    free_r = row_dict.get("free_rank") or (row_dict.get("rank") if feed_type_norm == "top-free" else None)
+                    gross_r = row_dict.get("grossing_rank") or (row_dict.get("rank") if feed_type_norm == "top-grossing" else None)
+                    row_dict["monetization_model"] = classify_monetization_model(
+                        price=row_dict.get("price"),
+                        iap_list=iap_list,
+                        free_rank=free_r,
+                        grossing_rank=gross_r,
+                    )
 
                 sig = row_dict.get("signal") or "STEADY"
                 row_dict["signal"] = sig
@@ -223,6 +250,7 @@ def get_data_view(
 
     return {
         "country": country,
+        "feed_type": feed_type_norm,
         "current_market": current_market,
         "markets": markets,
         "snapshots": snapshots_list,
@@ -535,6 +563,18 @@ def get_dashboard_view(
     if genre_dist.get("breakdown"):
         top_genre = next(iter(genre_dist["breakdown"].keys()), None)
 
+    # Compute monetization distribution
+    monetization_counts: dict[str, int] = {}
+    for r in records:
+        model = r.get("monetization_model") or "PURE_ADS"
+        monetization_counts[model] = monetization_counts.get(model, 0) + 1
+    total_m = sum(monetization_counts.values()) or 1
+    sorted_m = dict(sorted(monetization_counts.items(), key=lambda item: item[1], reverse=True))
+    monetization_dist = {
+        "breakdown": sorted_m,
+        "percentages": {k: round((v / total_m) * 100, 1) for k, v in sorted_m.items()},
+    }
+
     summary = {
         "total_games": len(records),
         "hot_waves_count": sum(1 for r in radar_items if r.get("opportunity_score", 0) >= 75.0),
@@ -542,6 +582,7 @@ def get_dashboard_view(
         "top_subgenre": top_genre,
         "genre_distribution": genre_dist,
         "mechanic_distribution": mech_dist,
+        "monetization_distribution": monetization_dist,
     }
 
     return {
