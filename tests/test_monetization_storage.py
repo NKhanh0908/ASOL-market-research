@@ -1,5 +1,6 @@
-from pathlib import Path
 import sqlite3
+from pathlib import Path
+
 from casual_scout.models import Chart
 from casual_scout.storage.repository import Repository
 
@@ -25,11 +26,17 @@ def test_schema_migration_adds_monetization_columns(tmp_path: Path):
         assert "monetization_model" in meta_cols
 
         # Check daily_rank_analytics columns
-        an_cols = [r[1] for r in conn.execute("PRAGMA table_info(daily_rank_analytics)").fetchall()]
+        analytics_column_info = {
+            row[1]: row for row in conn.execute("PRAGMA table_info(daily_rank_analytics)").fetchall()
+        }
+        an_cols = list(analytics_column_info)
         assert "grossing_rank" in an_cols
         assert "free_rank" in an_cols
         assert "monetization_model" in an_cols
         assert "monetization_efficiency_flag" in an_cols
+        model_column = analytics_column_info["monetization_model"]
+        assert model_column[3] == 1
+        assert model_column[4] == "'PURE_ADS'"
 
 
 def test_schema_migration_is_idempotent_on_existing_db(tmp_path: Path):

@@ -6,6 +6,15 @@ from pathlib import Path
 
 
 def launch_collector(run_id: str, data_dir: Path) -> int:
+    return _launch(run_id, data_dir, "work")
+
+
+def launch_pipeline(run_id: str, data_dir: Path) -> int:
+    """Launch collection plus post-collection analysis detached from the web request."""
+    return _launch(run_id, data_dir, "pipeline")
+
+
+def _launch(run_id: str, data_dir: Path, command: str) -> int:
     resolved_dir = Path(data_dir).resolve()
     log_dir = resolved_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -22,7 +31,7 @@ def launch_collector(run_id: str, data_dir: Path) -> int:
                 sys.executable,
                 "-m",
                 "casual_scout",
-                "work",
+                command,
                 "--run-id",
                 run_id,
                 "--data-dir",

@@ -552,6 +552,18 @@ def get_dashboard_view(
             (date_str,),
         ).fetchall()
         history_records = [dict(hr) for hr in hist_rows]
+        latest_collection = conn.execute(
+            """
+            SELECT r.id, r.status, r.started_at, r.ended_at, SUM(mr.valid_count) AS valid_count
+            FROM runs r
+            JOIN market_runs mr ON mr.run_id = r.id
+            JOIN charts c ON c.id = mr.chart_id
+            WHERE c.country = 'vn'
+            GROUP BY r.id
+            ORDER BY r.started_at DESC
+            LIMIT 1
+            """
+        ).fetchone()
 
     genre_dist = compute_genre_distribution(records)
     mech_dist = compute_mechanic_distribution(records)
@@ -594,6 +606,19 @@ def get_dashboard_view(
         "heatmap": heatmap,
         "trends": trends,
         "radar_items": radar_items[:50],
+        "collection_status": {
+            "run_id": str(latest_collection["id"]) if latest_collection else None,
+            "status": str(latest_collection["status"]) if latest_collection else "not_started",
+            "started_at_vn": format_vn_time(str(latest_collection["started_at"]))
+            if latest_collection
+            else "Chưa có lần crawl",
+            "ended_at_vn": format_vn_time(str(latest_collection["ended_at"]))
+            if latest_collection and latest_collection["ended_at"]
+            else None,
+            "valid_count": int(latest_collection["valid_count"] or 0)
+            if latest_collection
+            else 0,
+        },
     }
 
 

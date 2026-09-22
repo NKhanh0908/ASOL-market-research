@@ -1,7 +1,7 @@
 # Thiết kế — Scheduler thu thập hằng ngày trên Web
 
 **Ngày:** 2026-09-22
-**Trạng thái:** Chờ người dùng duyệt để triển khai
+**Trạng thái:** Đã triển khai ngày 2026-09-22
 
 ## Mục tiêu
 

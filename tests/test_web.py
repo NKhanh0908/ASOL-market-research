@@ -76,6 +76,60 @@ def test_post_runs_with_csrf_redirects_and_launches(web_setup):
     assert len(calls) == 1
 
 
+def test_schedule_api_persists_enabled_state_and_manages_scheduler_lifecycle(
+    tmp_path: Path,
+    fake_launcher: Callable[[str, Path], int],
+):
+    lifecycle: list[str] = []
+
+    class FakeScheduler:
+        def start(self) -> None:
+            lifecycle.append("start")
+
+        def stop(self) -> None:
+            lifecycle.append("stop")
+
+    settings = Settings(tmp_path)
+    app = create_app(
+        settings,
+        launcher=fake_launcher,
+        scheduler_factory=lambda _repo, _launcher: FakeScheduler(),
+    )
+
+    with TestClient(app, base_url="http://127.0.0.1:8000") as client:
+        assert lifecycle == ["start"]
+        client.get("/")
+        csrf_token = client.cookies.get("csrftoken") or ""
+
+        schedule = client.get("/api/schedule")
+        assert schedule.status_code == 200
+        assert schedule.json()["enabled"] is False
+
+        updated = client.patch(
+            "/api/schedule",
+            headers={
+                "Origin": "http://127.0.0.1:8000",
+                "X-CSRF-Token": csrf_token,
+            },
+            json={"enabled": True},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["enabled"] is True
+
+    assert lifecycle == ["start", "stop"]
+
+
+def test_dashboard_shows_daily_vietnam_collection_controls(web_setup):
+    _repo, client, _launcher, _calls = web_setup
+
+    response = client.get("/dashboard")
+
+    assert response.status_code == 200
+    assert "Thu thập iOS VN" in response.text
+    assert "Crawl ngay" in response.text
+    assert "07:00" in response.text
+
+
 def test_runs_list_and_detail(web_setup):
     repo, client, _launcher, _calls = web_setup
     from casual_scout.collection.jobs import JobService

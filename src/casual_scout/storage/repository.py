@@ -77,7 +77,14 @@ class Repository:
             if "free_rank" not in an_cols:
                 connection.execute("ALTER TABLE daily_rank_analytics ADD COLUMN free_rank INTEGER")
             if "monetization_model" not in an_cols:
-                connection.execute("ALTER TABLE daily_rank_analytics ADD COLUMN monetization_model TEXT")
+                connection.execute(
+                    "ALTER TABLE daily_rank_analytics "
+                    "ADD COLUMN monetization_model TEXT NOT NULL DEFAULT 'PURE_ADS'"
+                )
+            connection.execute(
+                "UPDATE daily_rank_analytics SET monetization_model = 'PURE_ADS' "
+                "WHERE monetization_model IS NULL"
+            )
             if "monetization_efficiency_flag" not in an_cols:
                 connection.execute("ALTER TABLE daily_rank_analytics ADD COLUMN monetization_efficiency_flag TEXT")
 
@@ -89,7 +96,58 @@ class Repository:
                 """,
                 [(*market, now) for market in _MARKETS],
             )
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO daily_schedule
+                    (id, enabled, time_local, timezone, country, chart_type, updated_at)
+                VALUES (1, 0, '07:00', 'Asia/Ho_Chi_Minh', 'vn', 'top-free', ?)
+                """,
+                (now,),
+            )
             connection.commit()
+
+    def get_daily_schedule(self) -> dict[str, Any]:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT enabled, time_local, timezone, country, chart_type, last_triggered_local_date
+                FROM daily_schedule
+                WHERE id = 1
+                """
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("daily schedule has not been initialized")
+        return {
+            "enabled": bool(row["enabled"]),
+            "time": str(row["time_local"]),
+            "timezone": str(row["timezone"]),
+            "country": str(row["country"]),
+            "chart_type": str(row["chart_type"]),
+            "last_triggered_local_date": row["last_triggered_local_date"],
+        }
+
+    def set_daily_schedule_enabled(self, enabled: bool) -> dict[str, Any]:
+        now = _utc_text(datetime.now(UTC))
+        with self._write_connection() as connection:
+            connection.execute(
+                "UPDATE daily_schedule SET enabled = ?, updated_at = ? WHERE id = 1",
+                (int(enabled), now),
+            )
+        return self.get_daily_schedule()
+
+    def claim_daily_schedule_date(self, local_date: str) -> bool:
+        now = _utc_text(datetime.now(UTC))
+        with self._write_connection() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE daily_schedule
+                SET last_triggered_local_date = ?, updated_at = ?
+                WHERE id = 1
+                  AND (last_triggered_local_date IS NULL OR last_triggered_local_date <> ?)
+                """,
+                (local_date, now, local_date),
+            )
+            return cursor.rowcount == 1
 
     def save_snapshot(
         self, run_id: str, result: HttpResult, parsed: ParsedChart
@@ -474,7 +532,9 @@ class Repository:
                 """
                 SELECT mv.app_id, mv.name, mv.developer, mv.primary_genre,
                        mv.genres_json, mv.description, mv.average_rating,
-                       mv.rating_count, mv.store_url, mv.price, mv.currency
+                       mv.rating_count, mv.store_url, mv.price, mv.currency,
+                       mv.in_app_purchases_json, mv.has_in_app_purchases,
+                       mv.monetization_model
                 FROM snapshot_metadata sm
                 JOIN metadata_versions mv ON mv.id = sm.metadata_version_id
                 WHERE sm.snapshot_id = ?
@@ -486,6 +546,11 @@ class Repository:
             d = dict(r)
             d["genres"] = (
                 json.loads(d["genres_json"]) if d["genres_json"] else []
+            )
+            d["in_app_purchases"] = (
+                json.loads(d["in_app_purchases_json"])
+                if d["in_app_purchases_json"]
+                else []
             )
             result[d["app_id"]] = d
         return result
@@ -629,7 +694,7 @@ class Repository:
                         cross_markets,
                         rec.get("grossing_rank"),
                         rec.get("free_rank"),
-                        rec.get("monetization_model"),
+                        rec.get("monetization_model") or "PURE_ADS",
                         rec.get("monetization_efficiency_flag"),
                         created_at,
                     ),

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 from collections.abc import Callable
-from contextlib import closing
+from contextlib import asynccontextmanager, closing
 from pathlib import Path
 from uuid import uuid4
 
@@ -13,8 +13,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from casual_scout.collection.jobs import JobService
-from casual_scout.collection.processes import launch_collector
+from casual_scout.collection.processes import launch_pipeline
 from casual_scout.config import Settings
+from casual_scout.operations.daily_scheduler import DailyScheduler
 from casual_scout.storage import Repository
 from casual_scout.web.security import (
     LocalOriginMiddleware,
@@ -35,12 +36,27 @@ _ALL_MARKETS = ["vn", "us", "bn", "kh", "id", "la", "my", "mm", "ph", "sg", "th"
 
 def create_app(
     settings: Settings,
-    launcher: Callable[[str, Path], int] = launch_collector,
+    launcher: Callable[[str, Path], int] = launch_pipeline,
+    scheduler_factory: Callable[[Repository, Callable[[str, Path], int]], object] | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="Casual Scout")
     repo = Repository(settings.data_dir)
     repo.initialize()
     jobs = JobService(repo)
+    scheduler = (
+        scheduler_factory(repo, launcher)
+        if scheduler_factory is not None
+        else DailyScheduler(repo, launcher)
+    )
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        scheduler.start()
+        try:
+            yield
+        finally:
+            scheduler.stop()
+
+    app = FastAPI(title="Casual Scout", lifespan=lifespan)
 
     secret = get_or_create_secret(settings.data_dir)
     sec_mgr = SecurityManager(secret)
@@ -188,11 +204,65 @@ def create_app(
             row = conn.execute("SELECT id, status, ended_at FROM runs WHERE id = ?", (run_id,)).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail="Run not found")
-            return {
-                "id": str(row["id"]),
-                "status": str(row["status"]),
-                "ended_at": str(row["ended_at"]) if row["ended_at"] else None,
-            }
+        return {
+            "id": str(row["id"]),
+            "status": str(row["status"]),
+            "ended_at": str(row["ended_at"]) if row["ended_at"] else None,
+        }
+
+    @app.get("/api/charts/grossing")
+    def grossing_chart_endpoint(country: str = "vn", date: str | None = None):
+        if not date:
+            raise HTTPException(status_code=400, detail="date is required")
+
+        snapshot_ref = repo.find_latest_complete_snapshot_for_date(
+            date, country, collection="topgrossingapplications"
+        )
+        if snapshot_ref is None:
+            raise HTTPException(status_code=404, detail="No complete Top Grossing snapshot found")
+
+        snapshot = repo.get_snapshot(snapshot_ref["id"])
+        return {
+            "snapshot_id": snapshot["id"],
+            "country": snapshot["chart"]["country"],
+            "date": date,
+            "observed_at": snapshot["observed_at"],
+            "entries": [
+                {"app_id": entry["app_id"], "rank": entry["rank"], "name": entry["name"]}
+                for entry in snapshot["entries"]
+            ],
+        }
+
+    @app.get("/api/schedule")
+    def get_daily_schedule():
+        schedule = repo.get_daily_schedule()
+        with closing(repo._connect()) as connection:
+            last_run = connection.execute(
+                """
+                SELECT r.id, r.status, r.started_at, r.ended_at
+                FROM runs r
+                JOIN market_runs mr ON mr.run_id = r.id
+                JOIN charts c ON c.id = mr.chart_id
+                WHERE c.country = 'vn'
+                GROUP BY r.id
+                ORDER BY r.started_at DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        schedule["last_run"] = dict(last_run) if last_run else None
+        return schedule
+
+    @app.patch("/api/schedule")
+    async def update_daily_schedule(request: Request):
+        session_id = request.cookies.get("session_id") or ""
+        csrf_token = request.headers.get("X-CSRF-Token", "")
+        if not sec_mgr.validate_csrf_token(csrf_token, session_id):
+            raise HTTPException(status_code=403, detail="Invalid CSRF token")
+        body = await request.json()
+        enabled = body.get("enabled")
+        if not isinstance(enabled, bool):
+            raise HTTPException(status_code=422, detail="enabled must be a boolean")
+        return repo.set_daily_schedule_enabled(enabled)
 
     @app.get("/games/{country}/{app_id}")
     @app.get("/games/{app_id}")
@@ -318,6 +388,7 @@ def create_app(
         csrf_token = sec_mgr.generate_csrf_token(session_id)
         
         data = get_dashboard_view(repo, date_str=date, country=country)
+        data["daily_schedule"] = repo.get_daily_schedule()
         context = {
             "request": request,
             "active_tab": "dashboard",
@@ -431,8 +502,8 @@ def create_app(
 
     @app.get("/api/export/shortlist")
     def api_export_shortlist(format: str = "csv"):
-        from casual_scout.stats.shortlist import ShortlistService
         from casual_scout.stats.exporter import export_shortlist_to_csv, export_to_json
+        from casual_scout.stats.shortlist import ShortlistService
         service = ShortlistService(repo)
         items = service.list_shortlists()
         if format.lower() == "json":

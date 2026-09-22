@@ -30,6 +30,29 @@
   </form>
 </div>
 
+<section style="background: var(--card-bg, #1e293b); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border-color, #334155); margin-bottom: 2rem;">
+  <div style="display: flex; justify-content: space-between; align-items: start; gap: 1rem; flex-wrap: wrap;">
+    <div>
+      <h2 style="font-size: 1.1rem; margin: 0 0 0.35rem;">Thu thập iOS VN</h2>
+      <p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">Top Free Việt Nam. Crawl xong sẽ tự phân tích dữ liệu của ngày đó.</p>
+    </div>
+    <form method="POST" action="/runs" style="margin: 0;">
+      <input type="hidden" name="country" value="vn">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" style="padding: 0.55rem 0.9rem; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Crawl ngay</button>
+    </form>
+  </div>
+  <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: center; margin-top: 1rem; font-size: 0.875rem;">
+    <span>Trạng thái gần nhất: <strong>{{ collection_status.status }}</strong> · {{ collection_status.started_at_vn }}{% if collection_status.run_id %} · {{ collection_status.valid_count }} game hợp lệ · <a href="/runs/{{ collection_status.run_id }}">Xem chi tiết</a>{% endif %}</span>
+    <label style="display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+      <input id="daily-schedule-toggle" type="checkbox" {% if daily_schedule.enabled %}checked{% endif %}>
+      <span id="daily-schedule-label">Lịch mỗi ngày lúc {{ daily_schedule.time }} ({{ daily_schedule.timezone }})</span>
+    </label>
+  </div>
+  <p id="daily-schedule-message" style="display: none; color: #ef4444; margin: 0.75rem 0 0; font-size: 0.8rem;"></p>
+  <p style="margin: 0.75rem 0 0; color: var(--text-muted); font-size: 0.8rem;">Lịch chỉ chạy khi web server còn hoạt động.</p>
+</section>
+
 <!-- KPI Cards -->
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
   <div style="background: var(--card-bg, #1e293b); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border-color, #334155);">
@@ -255,6 +278,31 @@
 </div>
 
 <script>
+const scheduleToggle = document.getElementById('daily-schedule-toggle');
+const scheduleMessage = document.getElementById('daily-schedule-message');
+scheduleToggle.addEventListener('change', async () => {
+  const enabled = scheduleToggle.checked;
+  scheduleToggle.disabled = true;
+  scheduleMessage.style.display = 'none';
+  try {
+    const response = await fetch('/api/schedule', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': {{ csrf_token | tojson }}
+      },
+      body: JSON.stringify({ enabled })
+    });
+    if (!response.ok) throw new Error('Không thể cập nhật lịch.');
+  } catch (error) {
+    scheduleToggle.checked = !enabled;
+    scheduleMessage.textContent = error.message;
+    scheduleMessage.style.display = 'block';
+  } finally {
+    scheduleToggle.disabled = false;
+  }
+});
+
 // Chart.js rendering
 const genreData = {{ summary.genre_distribution.breakdown | tojson | safe }};
 const genreLabels = Object.keys(genreData);

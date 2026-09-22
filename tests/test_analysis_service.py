@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -22,8 +23,9 @@ def _create_snapshot_with_entries(
     observed_time_str: str,
     entries: list[tuple[str, int, str]],  # (app_id, rank, name)
     metadata_map: dict[str, dict] | None = None,
+    collection: str = "topfreeapplications",
 ):
-    chart_id = f'chart-{country}'
+    chart_id = f'chart-{country}-{collection}'
     mr_id = f'mr-{snap_id}'
     hash_id = f'hash-{snap_id}'
 
@@ -35,8 +37,8 @@ def _create_snapshot_with_entries(
         )
         conn.execute(
             'INSERT OR IGNORE INTO charts (id, provider, platform, country, collection, genre, depth, version, endpoint, created_at) '
-            'VALUES (?, \'apple\', \'ios\', ?, \'topfreeapplications\', \'7003\', 100, 1, \'url\', ?)',
-            (chart_id, country, f'{date_str}T00:00:00Z'),
+            'VALUES (?, \'apple\', \'ios\', ?, ?, \'7003\', 100, 1, \'url\', ?)',
+            (chart_id, country, collection, f'{date_str}T00:00:00Z'),
         )
         conn.execute(
             'INSERT INTO market_runs (id, run_id, chart_id, chart_status, enrichment_status, started_at) '
@@ -70,8 +72,8 @@ def _create_snapshot_with_entries(
                 meta = metadata_map[app_id]
                 meta_id = f'mv-{snap_id}-{app_id}'
                 conn.execute(
-                    'INSERT INTO metadata_versions (id, app_ref, provider, platform, country, app_id, fetched_at, status, raw_hash, name, developer, primary_genre, genres_json, description, price, currency, values_json) '
-                    'VALUES (?, ?, \'apple\', \'ios\', ?, ?, ?, \'complete\', ?, ?, ?, ?, ?, ?, 0, \'USD\', \'{}\')',
+                    'INSERT INTO metadata_versions (id, app_ref, provider, platform, country, app_id, fetched_at, status, raw_hash, name, developer, primary_genre, genres_json, description, price, currency, values_json, in_app_purchases_json, has_in_app_purchases) '
+                    'VALUES (?, ?, \'apple\', \'ios\', ?, ?, ?, \'complete\', ?, ?, ?, ?, ?, ?, 0, \'USD\', \'{}\', ?, ?)',
                     (
                         meta_id,
                         f'app:{app_id}',
@@ -84,6 +86,8 @@ def _create_snapshot_with_entries(
                         'Games',
                         '[\"Games\", \"Casual\", \"Puzzle\"]',
                         meta.get('description', ''),
+                        json.dumps(meta.get('in_app_purchases', [])),
+                        int(bool(meta.get('in_app_purchases'))),
                     ),
                 )
                 conn.execute(

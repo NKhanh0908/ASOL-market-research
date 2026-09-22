@@ -39,6 +39,17 @@ CREATE TABLE IF NOT EXISTS runs (
     summary_json TEXT NOT NULL DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS daily_schedule (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+    time_local TEXT NOT NULL DEFAULT '07:00' CHECK (time_local = '07:00'),
+    timezone TEXT NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
+    country TEXT NOT NULL DEFAULT 'vn' REFERENCES markets(country),
+    chart_type TEXT NOT NULL DEFAULT 'top-free' CHECK (chart_type = 'top-free'),
+    last_triggered_local_date TEXT,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS market_runs (
     id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES runs(id),
@@ -272,7 +283,7 @@ CREATE TABLE IF NOT EXISTS daily_rank_analytics (
     cross_markets_json TEXT NOT NULL,
     grossing_rank INTEGER,
     free_rank INTEGER,
-    monetization_model TEXT,
+    monetization_model TEXT NOT NULL DEFAULT 'PURE_ADS',
     monetization_efficiency_flag TEXT,
     created_at TEXT NOT NULL,
     UNIQUE(date, country, app_id)
@@ -305,4 +316,3 @@ CREATE TABLE IF NOT EXISTS shortlists (
 CREATE INDEX IF NOT EXISTS idx_shortlist_status ON shortlists(status);
 CREATE INDEX IF NOT EXISTS idx_shortlist_priority ON shortlists(priority);
 CREATE INDEX IF NOT EXISTS idx_shortlist_app ON shortlists(app_id);
-

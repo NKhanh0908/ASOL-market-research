@@ -88,6 +88,8 @@ casual_scout serve --host 127.0.0.1 --port 8000 --data-dir .\data
 ```
 Truy cập [http://127.0.0.1:8000](http://127.0.0.1:8000) trên trình duyệt.
 
+Trên `/dashboard`, dùng **Crawl ngay** để thu thập Top Free iOS Việt Nam và tự phân tích sau khi crawl xong. Lịch 07:00 `Asia/Ho_Chi_Minh` tắt mặc định; bật bằng công tắc trên Dashboard. Lịch chỉ chạy khi lệnh `serve` và máy vẫn đang hoạt động, không chạy bù khi server tắt.
+
 ---
 
 ## 💻 Tổng Hợp Toàn Bộ Lệnh CLI
@@ -335,4 +337,3 @@ pytest -v
 
 ## 📄 Bản Quyền
 Phát triển cho mục đích Nghiên cứu & Phân tích Thị trường Casual Games — ASOL. Giấy phép MIT.
-

@@ -71,6 +71,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Skip fetching app metadata lookup",
     )
+    collect_parser.add_argument(
+        "--chart-type",
+        "--feed-type",
+        dest="chart_type",
+        type=str,
+        default="all",
+        choices=["all", "free", "grossing", "top-free", "top-grossing"],
+        help="Chart types to collect: all, free, grossing (default: all)",
+    )
 
 
     # work
@@ -93,6 +102,20 @@ def main(argv: list[str] | None = None) -> int:
         "--no-enrich",
         action="store_true",
         help="Skip fetching app metadata lookup",
+    )
+
+    # pipeline
+    pipeline_parser = subparsers.add_parser(
+        "pipeline", help="Run a collection worker and refresh daily analysis"
+    )
+    pipeline_parser.add_argument(
+        "--run-id", type=str, required=True, help="ID of the run to execute"
+    )
+    pipeline_parser.add_argument(
+        "--data-dir", type=Path, default=Path("data"), help="Path to data directory"
+    )
+    pipeline_parser.add_argument(
+        "--no-enrich", action="store_true", help="Skip fetching app metadata lookup"
     )
 
     # serve
@@ -211,6 +234,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Filter by signal (fast_risers, new_entries, falling, steady)",
     )
     trends_parser.add_argument(
+        "--chart-type",
+        type=str,
+        default="free",
+        choices=["free", "grossing", "top-free", "top-grossing"],
+        help="Chart to query: free or grossing (default: free)",
+    )
+    trends_parser.add_argument(
         "--json",
         action="store_true",
         help="Output raw JSON instead of table",
@@ -239,6 +269,7 @@ def main(argv: list[str] | None = None) -> int:
     stats_radar_parser.add_argument("--date", type=str, default=datetime.now(UTC).strftime("%Y-%m-%d"), help="Target date YYYY-MM-DD")
     stats_radar_parser.add_argument("--country", type=str, default="all", help="Country code or 'all'")
     stats_radar_parser.add_argument("--limit", type=int, default=20, help="Number of games to show")
+    stats_radar_parser.add_argument("--monetization", type=str, default=None, help="Filter by monetization model (PURE_IAP, HYBRID, PURE_ADS, PAID_PREMIUM)")
     stats_radar_parser.add_argument("--data-dir", type=Path, default=Path("data"), help="Path to data directory")
     stats_radar_parser.add_argument("--json", action="store_true", help="Output raw JSON")
 
@@ -280,11 +311,19 @@ def main(argv: list[str] | None = None) -> int:
                 sys.stderr.write(f"Error: unknown country '{c}'. Allowed: {sorted(_ALLOWED_COUNTRIES)}\n")
                 return 1
 
+        chart_types = None
+        if getattr(args, "chart_type", "all") in ("free", "top-free"):
+            chart_types = ["top-free"]
+        elif getattr(args, "chart_type", "all") in ("grossing", "top-grossing"):
+            chart_types = ["top-grossing"]
+        elif getattr(args, "chart_type", "all") == "all":
+            chart_types = ["top-free", "top-grossing"]
+
         repo = Repository(args.data_dir)
         repo.initialize()
         jobs = JobService(repo)
         req_key = f"cli-collect-{uuid4()}"
-        run_id = jobs.submit("manual", country_list, req_key)
+        run_id = jobs.submit("manual", country_list, req_key, chart_types=chart_types)
 
         settings = Settings(args.data_dir)
         provider = AppleProvider(settings)
@@ -302,6 +341,19 @@ def main(argv: list[str] | None = None) -> int:
         collector = Collector(repo, provider, jobs)
         status = collector.execute(args.run_id, enrich=not args.no_enrich)
         return 0 if status in ("succeeded", "partial") else 1
+
+    if args.command == "pipeline":
+        repo = Repository(args.data_dir)
+        repo.initialize()
+        jobs = JobService(repo)
+        settings = Settings(args.data_dir)
+        provider = AppleProvider(settings)
+        collector = Collector(repo, provider, jobs)
+        status = collector.execute(args.run_id, enrich=not args.no_enrich)
+        if status not in ("succeeded", "partial"):
+            return 1
+        AnalysisService(repo).analyze_date(datetime.now(UTC).strftime("%Y-%m-%d"), ["vn"])
+        return 0
 
     if args.command == "serve":
         import uvicorn
@@ -386,6 +438,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "trends":
         repo = Repository(args.data_dir)
         repo.initialize()
+        is_grossing = args.chart_type in ("grossing", "top-grossing")
         signal_filter = None
         if args.signal:
             s = args.signal.strip().upper()
@@ -398,13 +451,47 @@ def main(argv: list[str] | None = None) -> int:
             elif s in ("STEADY",):
                 signal_filter = "STEADY"
 
-        records = repo.get_daily_analytics(args.date, args.country, signal_filter)
+        if is_grossing:
+            if args.signal:
+                sys.stderr.write("Error: --signal is only available for Top Free trends\n")
+                return 1
+            snapshot_ref = repo.find_latest_complete_snapshot_for_date(
+                args.date, args.country, collection="topgrossingapplications"
+            )
+            if snapshot_ref is None:
+                records = []
+            else:
+                snapshot = repo.get_snapshot(snapshot_ref["id"])
+                records = [
+                    {
+                        "app_id": entry["app_id"],
+                        "current_rank": entry["rank"],
+                        "name": entry["name"],
+                        "chart_type": "top-grossing",
+                    }
+                    for entry in snapshot["entries"]
+                ]
+        else:
+            records = repo.get_daily_analytics(args.date, args.country, signal_filter)
 
         if args.json:
             sys.stdout.write(json.dumps(records, indent=2, ensure_ascii=False) + "\n")
             return 0
 
-        # Output readable table
+        if is_grossing:
+            md_lines = [
+                f"# Top Grossing Rankings for {args.country.upper()} on {args.date}",
+                f"Total records: **{len(records)}**",
+                "",
+                "| Rank | App ID | Title |",
+                "|---|---|---|",
+            ]
+            for r in records:
+                md_lines.append(f"| #{r['current_rank']} | `{r['app_id']}` | {r['name']} |")
+            sys.stdout.write("\n".join(md_lines) + "\n")
+            return 0
+
+        # Output readable Top Free trend table
         md_lines = [
             f"# Daily Trends for {args.country.upper()} on {args.date}",
             f"Total records: **{len(records)}**",
@@ -447,16 +534,30 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         if args.stats_command == "radar":
-            radar_items = data["radar_items"][:args.limit]
+            radar_items = data["radar_items"]
+            if args.monetization:
+                m_filter = args.monetization.strip().upper()
+                if m_filter in ("IAP", "PURE_IAP"):
+                    radar_items = [r for r in radar_items if r.get("monetization_model") == "PURE_IAP"]
+                elif m_filter in ("HYBRID",):
+                    radar_items = [r for r in radar_items if r.get("monetization_model") == "HYBRID"]
+                elif m_filter in ("ADS", "PURE_ADS"):
+                    radar_items = [r for r in radar_items if r.get("monetization_model") == "PURE_ADS"]
+                elif m_filter in ("PAID", "PAID_PREMIUM"):
+                    radar_items = [r for r in radar_items if r.get("monetization_model") == "PAID_PREMIUM"]
+                elif m_filter != "ALL":
+                    radar_items = [r for r in radar_items if r.get("monetization_model") == m_filter]
+
+            radar_items = radar_items[:args.limit]
             if args.json:
                 sys.stdout.write(json.dumps(radar_items, indent=2, ensure_ascii=False) + "\n")
                 return 0
             
             sys.stdout.write(f"# Opportunity Radar (Top {len(radar_items)}) on {data['selected_date']}\n\n")
-            sys.stdout.write("| Score | Badge | Rank | App ID | Title | Genre | Mechanic | Breadth |\n")
-            sys.stdout.write("|---|---|---|---|---|---|---|---|\n")
+            sys.stdout.write("| Score | Badge | Rank | App ID | Title | Genre | Mechanic | Monetization | Breadth |\n")
+            sys.stdout.write("|---|---|---|---|---|---|---|---|---|\n")
             for r in radar_items:
-                sys.stdout.write(f"| {r['opportunity_score']} | {r['opportunity_badge']} | #{r['current_rank']} | `{r['app_id']}` | {r.get('title') or r['app_id']} | {r.get('subgenre') or '—'} | {r.get('mechanic') or '—'} | {r.get('cross_market_count')}/11 |\n")
+                sys.stdout.write(f"| {r['opportunity_score']} | {r['opportunity_badge']} | #{r['current_rank']} | `{r['app_id']}` | {r.get('title') or r['app_id']} | {r.get('subgenre') or '—'} | {r.get('mechanic') or '—'} | {r.get('monetization_model') or '—'} | {r.get('cross_market_count')}/11 |\n")
             return 0
 
     if args.command == "shortlist":
