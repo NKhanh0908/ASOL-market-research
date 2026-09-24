@@ -1,7 +1,7 @@
 # Thiết kế — Thu thập Google Play Android Top Free Casual VN
 
 **Ngày:** 2026-09-22
-**Trạng thái:** Đã duyệt thiết kế; chờ duyệt spec và lập kế hoạch triển khai
+**Trạng thái:** Đã duyệt technical spec; implementation plan đã được lập, chưa triển khai code Android
 
 ## Mục tiêu
 
