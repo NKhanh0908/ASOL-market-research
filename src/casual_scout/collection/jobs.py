@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -32,6 +32,46 @@ def _is_process_alive(pid: int, created_at: float | None = None) -> bool:
 class JobService:
     def __init__(self, repo: Repository) -> None:
         self.repo = repo
+
+    def submit_scheduled_ios(self, kind: str, value: str, now: datetime) -> str | None:
+        """Claim a schedule and create its own run in one transaction.
+
+        Unlike manual submit, never return another platform's active run.
+        """
+        stamp = _utc_text(now)
+        with self.repo._write_connection() as conn:
+            if conn.execute("SELECT 1 FROM runs WHERE status IN ('queued','running') LIMIT 1").fetchone():
+                return None
+            if kind == 'daily':
+                claimed = conn.execute('''UPDATE daily_schedule SET last_triggered_local_date=?,updated_at=?
+                    WHERE id=1 AND enabled=1 AND (last_triggered_local_date IS NULL OR last_triggered_local_date<>?)''', (value, stamp, value))
+                request_key = f'daily-vn-{value}'
+            elif kind == 'one-time':
+                row = conn.execute("SELECT * FROM one_time_collection_schedule WHERE id=1 AND status='pending'").fetchone()
+                if not row or row['scheduled_for_utc'] != value:
+                    return None
+                due = datetime.fromisoformat(value)
+                if due > now:
+                    return None
+                if now-due > timedelta(minutes=1):
+                    conn.execute("UPDATE one_time_collection_schedule SET status='missed',updated_at=? WHERE id=1", (stamp,))
+                    return None
+                claimed = conn.execute("UPDATE one_time_collection_schedule SET status='triggered',triggered_at=?,updated_at=? WHERE id=1 AND status='pending'", (stamp, stamp))
+                request_key = f'one-time-ios-{value}'
+            else:
+                raise ValueError('unknown schedule kind')
+            if claimed.rowcount != 1:
+                return None
+            run_id = str(uuid4())
+            conn.execute('''INSERT INTO runs(id,request_key,"trigger",status,started_at,summary_json)
+                VALUES(?,?,?,'queued',?,'{}')''', (run_id, request_key, 'daily' if kind == 'daily' else 'manual', stamp))
+            chart = Chart('vn', feed_type='top-free')
+            endpoint = f'https://itunes.apple.com/vn/rss/{chart.collection}/limit={chart.depth}/genre={chart.genre}/json'
+            chart_id = self.repo._ensure_chart(conn, chart, endpoint)
+            self.repo._ensure_market_run(conn, run_id, chart_id, now)
+            if kind == 'one-time':
+                conn.execute('UPDATE one_time_collection_schedule SET run_id=? WHERE id=1', (run_id,))
+            return run_id
 
     def submit(
         self,

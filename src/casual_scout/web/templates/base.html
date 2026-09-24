@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Casual Scout{% endblock %} — iOS Market Research</title>
+  <title>{% block title %}Casual Scout{% endblock %} — Market Research</title>
   <link rel="stylesheet" href="/static/app.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -15,11 +15,19 @@
         <a href="/dashboard" class="{% if active_tab == 'dashboard' %}active{% endif %}">📊 Dashboard</a>
         <a href="/shortlist" class="{% if active_tab == 'shortlist' %}active{% endif %}">⭐ Shortlist</a>
         <a href="/data" class="{% if active_tab == 'data' %}active{% endif %}">🗂️ Dữ liệu thị trường</a>
+        <a href="/android" class="{% if active_tab == 'android' %}active{% endif %}">Android · Live</a>
         <a href="/runs" class="{% if active_tab == 'runs' %}active{% endif %}">⚙️ Lần thu thập</a>
       </nav>
     </header>
 
     <main>
+      {% if mock_demo %}
+      <aside role="note" style="background:#fff3cd;color:#663c00;border:2px solid #e0a800;padding:16px;margin-bottom:16px;border-radius:8px;">
+        <strong>MOCK — DỮ LIỆU THỬ NGHIỆM</strong><br>
+        Ngày 23/09/2026 là thứ hạng giả lập, không phải dữ liệu Apple lịch sử.
+        Đây là bản demo riêng; biến động và biểu đồ dùng ngày này cũng là mô phỏng.
+      </aside>
+      {% endif %}
       {% block content %}{% endblock %}
     </main>
 
@@ -27,5 +35,6 @@
       <p>Casual Scout P3 — Nghiên cứu thị trường Casual Game ASEAN + US. Chuẩn hoá múi giờ Việt Nam (UTC+7 / Asia/Ho_Chi_Minh).</p>
     </footer>
   </div>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

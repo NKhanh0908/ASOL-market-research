@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -117,6 +117,40 @@ def test_schedule_api_persists_enabled_state_and_manages_scheduler_lifecycle(
         assert updated.json()["enabled"] is True
 
     assert lifecycle == ["start", "stop"]
+
+
+def test_one_time_schedule_api_persists_future_ios_collection(web_setup):
+    _repo, client, _launcher, _calls = web_setup
+    client.get("/data")
+    csrf_token = client.cookies.get("csrftoken") or ""
+    scheduled_for = (datetime.now(UTC) + timedelta(hours=1)).astimezone().replace(
+        second=0, microsecond=0
+    )
+
+    created = client.post(
+        "/api/one-time-schedule",
+        headers={
+            "Origin": "http://127.0.0.1:8000",
+            "X-CSRF-Token": csrf_token,
+        },
+        json={"scheduled_for": scheduled_for.isoformat(timespec="minutes")},
+    )
+
+    assert created.status_code == 200
+    assert created.json()["status"] == "pending"
+    assert client.get("/api/one-time-schedule").json()["status"] == "pending"
+
+
+def test_data_page_shows_one_time_ios_schedule_controls(web_setup):
+    _repo, client, _launcher, _calls = web_setup
+
+    response = client.get("/data")
+
+    assert response.status_code == 200
+    assert 'id="one-time-schedule-at"' in response.text
+    assert "Đặt lịch crawl iOS một lần" in response.text
+    assert 'href="/android"' in response.text
+    assert "/api/one-time-schedule" in response.text
 
 
 def test_dashboard_shows_daily_vietnam_collection_controls(web_setup):

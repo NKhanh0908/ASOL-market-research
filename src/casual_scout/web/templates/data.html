@@ -42,6 +42,24 @@
     </form>
   </div>
 
+  <section aria-labelledby="one-time-schedule-heading" style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--surface);">
+    <div style="display: flex; justify-content: space-between; gap: 1rem; align-items: center; flex-wrap: wrap;">
+      <div>
+        <h3 id="one-time-schedule-heading" style="margin: 0; font-size: 1rem;">Đặt lịch crawl iOS một lần</h3>
+        <p style="margin: 0.3rem 0 0; color: var(--text-muted); font-size: 0.875rem;">Top Free Casual VN · giờ Việt Nam (Asia/Ho_Chi_Minh)</p>
+      </div>
+      <a class="btn btn-secondary" href="/android">Android · Crawl và xem trực tiếp</a>
+    </div>
+    <form id="one-time-schedule-form" style="display: flex; gap: 0.5rem; margin-top: 0.8rem; align-items: end; flex-wrap: wrap;">
+      <div class="form-group" style="margin: 0;">
+        <label for="one-time-schedule-at" style="font-size: 0.875rem; color: var(--text-muted);">Ngày và giờ chạy</label>
+        <input id="one-time-schedule-at" name="scheduled_for" type="datetime-local" required>
+      </div>
+      <button type="submit" class="btn">Đặt lịch iOS</button>
+      <span id="one-time-schedule-status" role="status" style="font-size: 0.875rem; color: var(--text-muted);"></span>
+    </form>
+  </section>
+
   <div style="display: flex; gap: 1rem; margin-top: 1.25rem; align-items: center; flex-wrap: wrap;">
     <div class="form-group">
       <label for="country_select" style="font-size: 0.875rem; color: var(--text-muted);">Thị trường:</label>
@@ -236,4 +254,58 @@
     <p style="margin-top: 0.5rem;"><a href="/data?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}" style="color: var(--primary);">Xem tất cả game</a></p>
   </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (() => {
+    const form = document.getElementById("one-time-schedule-form");
+    const dateInput = document.getElementById("one-time-schedule-at");
+    const status = document.getElementById("one-time-schedule-status");
+    let previousStatus = null;
+
+    const renderSchedule = (schedule) => {
+      if (schedule.status === "pending") {
+        status.textContent = `Đã lên lịch: ${schedule.scheduled_for_local} (iOS VN)`;
+      } else if (schedule.status === "triggered") {
+        status.textContent = "Đã bắt đầu crawl iOS.";
+      } else if (schedule.status === "missed") {
+        status.textContent = "Lịch đã qua khi máy chủ không chạy.";
+      } else {
+        status.textContent = "Chưa có lịch một lần.";
+      }
+      if (previousStatus === "pending" && schedule.status === "triggered") {
+        window.alert("Đang bắt đầu crawl iOS");
+      }
+      previousStatus = schedule.status;
+    };
+
+    const refreshSchedule = async () => {
+      const response = await fetch("/api/one-time-schedule");
+      if (response.ok) renderSchedule(await response.json());
+    };
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!dateInput.value) return;
+      const response = await fetch("/api/one-time-schedule", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": "{{ csrf_token }}"
+        },
+        body: JSON.stringify({ scheduled_for: dateInput.value })
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        window.alert(payload.detail || "Không thể đặt lịch crawl iOS.");
+        return;
+      }
+      renderSchedule(payload);
+    });
+
+    refreshSchedule();
+    window.setInterval(refreshSchedule, 10000);
+  })();
+</script>
 {% endblock %}

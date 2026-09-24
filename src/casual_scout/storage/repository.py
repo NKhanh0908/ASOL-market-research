@@ -104,6 +104,14 @@ class Repository:
                 """,
                 (now,),
             )
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO one_time_collection_schedule
+                    (id, status, updated_at)
+                VALUES (1, 'empty', ?)
+                """,
+                (now,),
+            )
             connection.commit()
 
     def get_daily_schedule(self) -> dict[str, Any]:
@@ -148,6 +156,94 @@ class Repository:
                 (local_date, now, local_date),
             )
             return cursor.rowcount == 1
+
+    def get_one_time_collection(self) -> dict[str, Any]:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                """
+                SELECT scheduled_for_utc, scheduled_for_local, status, run_id,
+                       created_at, triggered_at
+                FROM one_time_collection_schedule
+                WHERE id = 1
+                """
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("one-time collection schedule has not been initialized")
+        return dict(row)
+
+    def schedule_one_time_collection(
+        self, scheduled_for: datetime, scheduled_for_local: str
+    ) -> dict[str, Any]:
+        scheduled_for_utc = _utc_text(scheduled_for)
+        now = _utc_text(datetime.now(UTC))
+        with self._write_connection() as connection:
+            existing = connection.execute(
+                "SELECT status FROM one_time_collection_schedule WHERE id = 1"
+            ).fetchone()
+            if existing is not None and existing["status"] == "pending":
+                raise ValueError("a one-time collection is already scheduled")
+            connection.execute(
+                """
+                UPDATE one_time_collection_schedule
+                SET scheduled_for_utc = ?, scheduled_for_local = ?, status = 'pending',
+                    run_id = NULL, created_at = ?, triggered_at = NULL, updated_at = ?
+                WHERE id = 1
+                """,
+                (scheduled_for_utc, scheduled_for_local, now, now),
+            )
+        return self.get_one_time_collection()
+
+    def claim_due_one_time_collection(self, now: datetime) -> dict[str, Any] | None:
+        now_utc = now.astimezone(UTC)
+        now_text = _utc_text(now_utc)
+        with self._write_connection() as connection:
+            row = connection.execute(
+                """
+                SELECT scheduled_for_utc, scheduled_for_local
+                FROM one_time_collection_schedule
+                WHERE id = 1 AND status = 'pending'
+                """
+            ).fetchone()
+            if row is None or row["scheduled_for_utc"] is None:
+                return None
+
+            due_at = datetime.fromisoformat(str(row["scheduled_for_utc"]).replace("Z", "+00:00"))
+            if due_at > now_utc:
+                return None
+            if now_utc - due_at > timedelta(minutes=1):
+                connection.execute(
+                    """
+                    UPDATE one_time_collection_schedule
+                    SET status = 'missed', updated_at = ?
+                    WHERE id = 1 AND status = 'pending'
+                    """,
+                    (now_text,),
+                )
+                return None
+
+            cursor = connection.execute(
+                """
+                UPDATE one_time_collection_schedule
+                SET status = 'triggered', triggered_at = ?, updated_at = ?
+                WHERE id = 1 AND status = 'pending'
+                """,
+                (now_text, now_text),
+            )
+            if cursor.rowcount != 1:
+                return None
+            return dict(row)
+
+    def set_one_time_collection_run_id(self, run_id: str) -> None:
+        now = _utc_text(datetime.now(UTC))
+        with self._write_connection() as connection:
+            connection.execute(
+                """
+                UPDATE one_time_collection_schedule
+                SET run_id = ?, updated_at = ?
+                WHERE id = 1 AND status = 'triggered'
+                """,
+                (run_id, now),
+            )
 
     def save_snapshot(
         self, run_id: str, result: HttpResult, parsed: ParsedChart

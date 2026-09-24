@@ -3,8 +3,10 @@ from __future__ import annotations
 import secrets
 from collections.abc import Callable
 from contextlib import asynccontextmanager, closing
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Form, HTTPException, Request, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -12,14 +14,17 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from casual_scout.android.coordinator import AndroidCoordinator, launch_android
+from casual_scout.android.storage import AndroidStore
 from casual_scout.collection.jobs import JobService
 from casual_scout.collection.processes import launch_pipeline
 from casual_scout.config import Settings
-from casual_scout.operations.daily_scheduler import DailyScheduler
 from casual_scout.storage import Repository
+from casual_scout.web.android import android_router
 from casual_scout.web.security import (
     LocalOriginMiddleware,
     SecurityManager,
+    allowed_hosts,
     get_or_create_secret,
 )
 from casual_scout.web.views import (
@@ -32,20 +37,24 @@ from casual_scout.web.views import (
 )
 
 _ALL_MARKETS = ["vn", "us", "bn", "kh", "id", "la", "my", "mm", "ph", "sg", "th", "tl"]
+_VIETNAM = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
 def create_app(
     settings: Settings,
     launcher: Callable[[str, Path], int] = launch_pipeline,
     scheduler_factory: Callable[[Repository, Callable[[str, Path], int]], object] | None = None,
+    android_launcher=launch_android,
 ) -> FastAPI:
     repo = Repository(settings.data_dir)
     repo.initialize()
+    android_store = AndroidStore(repo)
+    android_store.initialize()
     jobs = JobService(repo)
     scheduler = (
         scheduler_factory(repo, launcher)
         if scheduler_factory is not None
-        else DailyScheduler(repo, launcher)
+        else AndroidCoordinator(repo, launcher, android_launcher=android_launcher)
     )
 
     @asynccontextmanager
@@ -63,13 +72,15 @@ def create_app(
 
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["127.0.0.1", "localhost", "testserver"],
+        allowed_hosts=allowed_hosts(),
     )
-    app.add_middleware(LocalOriginMiddleware)
+    app.add_middleware(LocalOriginMiddleware, hosts=allowed_hosts())
 
     templates_dir = Path(__file__).parent / "templates"
     templates = Jinja2Templates(directory=str(templates_dir))
     templates.env.autoescape = True
+    templates.env.globals["mock_demo"] = (settings.data_dir / "MOCK_DATA.json").is_file()
+    app.include_router(android_router(android_store, templates, sec_mgr, android_launcher))
 
     static_dir = Path(__file__).parent / "static"
     if static_dir.is_dir():
@@ -151,6 +162,11 @@ def create_app(
             request_key = f"web-{uuid4()}"
 
         run_id = jobs.submit("manual", countries, request_key)
+
+        with closing(repo._connect()) as connection:
+            android_run = connection.execute('SELECT id FROM android_jobs WHERE core_run_id=?', (run_id,)).fetchone()
+        if android_run:
+            return RedirectResponse(f'/android?job_id={run_id}', status_code=303)
 
         # Check if run needs launching
         with closing(repo._connect()) as conn:
@@ -263,6 +279,41 @@ def create_app(
         if not isinstance(enabled, bool):
             raise HTTPException(status_code=422, detail="enabled must be a boolean")
         return repo.set_daily_schedule_enabled(enabled)
+
+    @app.get("/api/one-time-schedule")
+    def get_one_time_schedule():
+        return repo.get_one_time_collection()
+
+    @app.post("/api/one-time-schedule")
+    async def create_one_time_schedule(request: Request):
+        session_id = request.cookies.get("session_id") or ""
+        csrf_token = request.headers.get("X-CSRF-Token", "")
+        if not sec_mgr.validate_csrf_token(csrf_token, session_id):
+            raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+        body = await request.json()
+        scheduled_for = body.get("scheduled_for")
+        if not isinstance(scheduled_for, str):
+            raise HTTPException(status_code=422, detail="scheduled_for must be an ISO datetime")
+        try:
+            parsed = datetime.fromisoformat(scheduled_for)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="scheduled_for must be an ISO datetime") from exc
+
+        local_time = (
+            parsed.astimezone(_VIETNAM)
+            if parsed.tzinfo is not None and parsed.utcoffset() is not None
+            else parsed.replace(tzinfo=_VIETNAM)
+        )
+        if local_time.astimezone(UTC) <= datetime.now(UTC):
+            raise HTTPException(status_code=422, detail="scheduled_for must be in the future")
+        try:
+            return repo.schedule_one_time_collection(
+                local_time,
+                local_time.replace(tzinfo=None).isoformat(timespec="minutes"),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.get("/games/{country}/{app_id}")
     @app.get("/games/{app_id}")

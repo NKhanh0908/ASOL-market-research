@@ -44,6 +44,10 @@ class DailyScheduler:
         self._thread = None
 
     def check_once(self) -> str:
+        one_time_run = self._check_one_time_collection()
+        if one_time_run is not None:
+            return one_time_run
+
         schedule = self.repository.get_daily_schedule()
         if not schedule["enabled"]:
             return "disabled"
@@ -56,15 +60,26 @@ class DailyScheduler:
             return "active_run"
 
         local_date = now_local.date().isoformat()
-        if not self.repository.claim_daily_schedule_date(local_date):
-            return "already_triggered"
+        run_id = JobService(self.repository).submit_scheduled_ios('daily', local_date, self.now())
+        if run_id is None:
+            return 'already_triggered_or_busy'
+        self.launch(run_id, self.repository.data_dir)
+        return run_id
 
-        run_id = JobService(self.repository).submit(
-            "daily",
-            [str(schedule["country"])],
-            f"daily-{schedule['country']}-{local_date}",
-            chart_types=[str(schedule["chart_type"])],
-        )
+    def _check_one_time_collection(self) -> str | None:
+        schedule = self.repository.get_one_time_collection()
+        if schedule["status"] != "pending":
+            return None
+
+        if datetime.fromisoformat(schedule['scheduled_for_utc']) > self.now():
+            return None
+
+        if self._has_active_run():
+            return "active_run"
+
+        run_id = JobService(self.repository).submit_scheduled_ios('one-time', schedule['scheduled_for_utc'], self.now())
+        if run_id is None:
+            return None
         self.launch(run_id, self.repository.data_dir)
         return run_id
 

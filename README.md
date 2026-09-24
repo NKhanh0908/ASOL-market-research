@@ -335,5 +335,39 @@ pytest -v
 
 ---
 
+## Android VN — crawl và phân tích theo batch
+
+Mở `/android` từ thanh điều hướng hoặc từ `/data`. Nút **Crawl Android ngay** lấy
+Top Free và Top Grossing Casual VN, hiển thị thứ hạng trước, rồi bổ sung metadata
+và phân tích theo batch 5 game. Trang tự cập nhật mỗi 2 giây và thích ứng điện thoại.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[android]"
+.\.venv\Scripts\python.exe -m casual_scout.cli serve --host 127.0.0.1 --port 8000 --data-dir .\data
+```
+
+Cần Chrome đã cài. Selenium tự tìm ChromeDriver tương thích; cache nằm trong
+`data/selenium-cache`. Không cần mở cửa sổ Chrome khi crawl.
+
+- Lịch Android 07:00 giờ Việt Nam mặc định tắt; bật bằng checkbox trên `/android`.
+  Server phải chạy; Android chờ collector iOS rảnh. Lịch iOS một lần vẫn hoạt động.
+- Dữ liệu đã xử lý giữ nguyên khi một game lỗi hoặc worker gián đoạn. Bấm crawl
+  lại để tạo lượt mới; metadata thành công được tái dùng tối đa 48 giờ.
+- Thứ hạng lấy mới mỗi run; số lượng game là số thực thu, không cam kết Top 100.
+  Developer là tên niêm yết. Top Grossing không phải số tiền doanh thu.
+- Android có trang phân tích riêng, chưa gộp vào dashboard/shortlist iOS.
+- Evidence HTML/PNG/manifest: `data/android-evidence/<run-id>/`;
+  log worker: `data/logs/android-<run-id>.log`.
+
+Để thử qua Wi-Fi, cấu hình đúng IP máy tính (ví dụ dưới đây); Windows Firewall
+cần cho phép cổng sử dụng trên mạng nội bộ:
+
+```powershell
+$env:CASUAL_SCOUT_LAN_HOSTS = '192.168.1.4'
+.\.venv\Scripts\python.exe -m casual_scout.cli serve --host 0.0.0.0 --port 8002 --data-dir .\data
+```
+
+Đánh giá triển khai: [Android live batches](docs/operations/2026-09-24-android-live-batches-acceptance.md).
+
 ## 📄 Bản Quyền
 Phát triển cho mục đích Nghiên cứu & Phân tích Thị trường Casual Games — ASOL. Giấy phép MIT.

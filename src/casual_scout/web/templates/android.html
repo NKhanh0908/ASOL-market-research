@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Android VN — tiến độ trực tiếp{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/android.css">
+<section id="android-app" data-csrf="{{ csrf_token }}">
+  <div class="android-heading">
+    <div><p class="android-kicker">GOOGLE PLAY · VIỆT NAM</p><h1>Casual Games Android</h1>
+      <p class="android-muted">Kết quả cập nhật sau mỗi batch 5 game. Bạn có thể xem ngay khi đang thu thập.</p></div>
+    <button id="android-crawl" class="btn" type="button">Crawl Android ngay</button>
+  </div>
+  <div id="android-error" role="alert" hidden></div>
+  <section class="card android-progress" aria-label="Tiến độ thu thập">
+    <div class="android-toolbar"><strong id="android-status" role="status">Đang tải trạng thái…</strong>
+      <label><input type="checkbox" id="android-schedule"> Tự chạy mỗi ngày 07:00 (giờ Việt Nam)</label></div>
+    <p class="android-muted">Lịch hoạt động khi web server đang chạy; Android chờ nếu iOS đang thu thập.</p>
+    <progress id="android-progress" max="1" value="0" aria-label="Metadata đã xử lý"></progress>
+    <div class="android-metrics"><span id="android-count">Chưa có dữ liệu</span><span id="android-batch"></span><span id="android-updated"></span></div>
+    <p id="android-errors" class="android-muted"></p>
+  </section>
+  <div class="android-toolbar android-filters">
+    <div class="android-tabs" role="group" aria-label="Chọn bảng xếp hạng">
+      <button type="button" data-feed="top-free" aria-pressed="true">Top Free</button>
+      <button type="button" data-feed="top-grossing" aria-pressed="false">Top Grossing</button>
+    </div>
+    <label>Lần thu thập <select id="android-history"><option value="">Mới nhất</option></select></label>
+  </div>
+  <p class="android-muted" id="android-chart-note">Thứ hạng doanh thu không phải số tiền doanh thu. Số game tùy dữ liệu Google Play trả về.</p>
+  <div id="android-results" class="android-grid"></div>
+  <p id="android-empty" class="card">Bấm “Crawl Android ngay” để bắt đầu. Dữ liệu đã xử lý sẽ xuất hiện tại đây.</p>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/android.js" defer></script>{% endblock %}

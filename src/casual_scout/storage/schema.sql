@@ -50,6 +50,19 @@ CREATE TABLE IF NOT EXISTS daily_schedule (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS one_time_collection_schedule (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    scheduled_for_utc TEXT,
+    scheduled_for_local TEXT,
+    status TEXT NOT NULL DEFAULT 'empty' CHECK (
+        status IN ('empty', 'pending', 'triggered', 'missed')
+    ),
+    run_id TEXT REFERENCES runs(id),
+    created_at TEXT,
+    triggered_at TEXT,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS market_runs (
     id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES runs(id),
