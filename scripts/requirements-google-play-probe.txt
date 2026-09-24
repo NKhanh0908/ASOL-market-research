@@ -1,0 +1,2 @@
+# Optional dependency for the standalone rendered-page experiment only.
+selenium==4.49.0
