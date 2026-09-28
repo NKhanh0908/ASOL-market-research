@@ -44,8 +44,10 @@ flowchart TD
 ```
 
 ### 2.1. Thư viện & Giao thức HTTP ($0 Chi phí)
-* Sử dụng thư viện chuẩn `google-play-scraper` (hoặc module HTTP client `httpx` với parser Google Play endpoints).
-* Phương thức: HTTP GET công khai, giả lập headers tiêu chuẩn trình duyệt, không yêu cầu API key, không yêu cầu xác thực tài khoản Google.
+* Sử dụng thư viện `httpx` độc lập (zero browser, zero ChromeDriver).
+* Phương thức:
+  - **Bảng xếp hạng (Charts):** HTTP `POST` trực tiếp tới endpoint công khai của Web Store `https://play.google.com/_/PlayStoreUi/data/batchexecute?rpcids=vyAe2` (giả lập headers tiêu chuẩn trình duyệt, không yêu cầu API key, không yêu cầu xác thực tài khoản Google).
+  - **Metadata & Lượt tải (Installs):** HTTP `GET` trực tiếp tới `https://play.google.com/store/apps/details?id=...` bóc tách cấu trúc `AF_initDataCallback` `ds:5`.
 * Chi phí: **$0.00**.
 
 ### 2.2. Danh sách 9 Thị trường & Mã Ngôn ngữ / Quốc gia tương ứng
@@ -104,8 +106,8 @@ Mỗi game được bổ sung các trường thông tin:
 
 ## 5. Tiêu Chí Nghiệm Thu (Acceptance Criteria)
 
-- [ ] Thu thập thành công Top 100 game cho 9 quốc gia theo dõi mà không cần cài đặt hoặc khởi chạy Google Chrome.
-- [ ] Lấy được đầy đủ cả 2 feed: `top-free` và `top-grossing`.
+- [ ] Thu thập thành công Top game cho 9 quốc gia theo dõi mà không cần cài đặt hoặc khởi chạy Google Chrome.
+- [ ] Lấy được đầy đủ cả 2 feed: `top-free` (100 game) và `top-grossing` (tối đa 100 game theo số lượng khả dụng thực tế của store).
 - [ ] 100% các game có thông tin lượt cài đặt hiển thị (`installs`) và số nguyên tối thiểu (`min_installs`).
 - [ ] Thời gian thu thập toàn bộ 9 thị trường hoàn tất dưới 60 giây khi mạng ổn định.
 - [ ] Đạt 100% test coverage cho module `GooglePlayProvider` với mock HTTP responses.
