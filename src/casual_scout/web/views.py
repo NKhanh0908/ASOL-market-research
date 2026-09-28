@@ -6,7 +6,10 @@ from datetime import UTC, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from casual_scout.analysis.monetization import classify_monetization_model
+from casual_scout.analysis.monetization import (
+    classify_android_monetization,
+    classify_monetization_model,
+)
 from casual_scout.analysis.taxonomy import classify_app
 from casual_scout.config import IOS_COLLECTION_COUNTRIES
 from casual_scout.models import Chart
@@ -51,6 +54,8 @@ def get_data_view(
     snapshot_id: str | None = None,
     signal: str | None = None,
     date: str | None = None,
+    *,
+    platform: str = "ios",
 ) -> dict:
     country = country.lower()
     feed_type_norm = (
@@ -58,14 +63,22 @@ def get_data_view(
         if feed_type in ("top-grossing", "topgrossingapplications", "grossing")
         else "top-free"
     )
-    collection = "topgrossingapplications" if feed_type_norm == "top-grossing" else "topfreeapplications"
+    if platform == "android":
+        collection = feed_type_norm
+        provider = "google"
+        genre = "GAME_CASUAL"
+    else:
+        collection = "topgrossingapplications" if feed_type_norm == "top-grossing" else "topfreeapplications"
+        provider = "apple"
+        genre = "7003"
+
     markets = get_markets(repo)
     current_market = next((m for m in markets if m["country"] == country), None)
     if current_market is None:
         country = "vn"
         current_market = next((m for m in markets if m["country"] == "vn"), None)
 
-    chart = Chart(country, feed_type=feed_type_norm)
+    chart = Chart(country, provider=provider, platform=platform, genre=genre, feed_type=feed_type_norm)
 
     with closing(repo._connect()) as conn:
         snaps = conn.execute(
@@ -74,11 +87,11 @@ def get_data_view(
             FROM snapshots s
             JOIN market_runs mr ON mr.id = s.market_run_id
             JOIN charts c ON c.id = mr.chart_id
-            WHERE c.country = ? AND c.collection = ?
+            WHERE c.country = ? AND c.platform = ? AND c.collection = ?
             ORDER BY s.observed_at DESC
             LIMIT 50
             """,
-            (country, collection),
+            (country, platform, collection),
         ).fetchall()
         snapshots_list = [
             {
@@ -124,6 +137,7 @@ def get_data_view(
                 SELECT e.rank, e.app_id, e.name, e.store_url, e.icon_url, e.developer, e.source_genres_json,
                        mv.description, mv.genres_json, mv.average_rating, mv.rating_count,
                        mv.price, mv.currency, mv.in_app_purchases_json, mv.has_in_app_purchases,
+                       mv.installs, mv.min_installs, mv.has_ads, mv.has_iap,
                        dra.delta_1d, dra.delta_3d, dra.delta_7d,
                        dra.signal, dra.signal_reasons_json,
                        dra.subgenre, dra.mechanic, dra.mechanic_evidence, dra.mechanic_confidence,
@@ -132,12 +146,17 @@ def get_data_view(
                 FROM entries e
                 LEFT JOIN snapshot_metadata sm ON sm.snapshot_id = e.snapshot_id AND sm.app_id = e.app_id
                 LEFT JOIN metadata_versions mv ON mv.id = sm.metadata_version_id
-                LEFT JOIN daily_rank_analytics dra ON dra.app_id = e.app_id AND dra.country = ?
-                     AND dra.date = (SELECT date FROM daily_canonical_snapshots WHERE snapshot_id = ?)
+                LEFT JOIN daily_rank_analytics dra ON dra.app_id = e.app_id AND dra.country = ? AND dra.platform = ?
+                     AND dra.date = (
+                         SELECT date FROM platform_canonical_snapshots WHERE snapshot_id = ?
+                         UNION
+                         SELECT date FROM daily_canonical_snapshots WHERE snapshot_id = ?
+                         LIMIT 1
+                     )
                 WHERE e.snapshot_id = ?
                 ORDER BY e.rank ASC
             """
-            params = [country, snap_id, snap_id]
+            params = [country, platform, snap_id, snap_id, snap_id]
             rows = conn.execute(query, params).fetchall()
 
             for r in rows:
@@ -186,12 +205,22 @@ def get_data_view(
                             pass
                     free_r = row_dict.get("free_rank") or (row_dict.get("rank") if feed_type_norm == "top-free" else None)
                     gross_r = row_dict.get("grossing_rank") or (row_dict.get("rank") if feed_type_norm == "top-grossing" else None)
-                    row_dict["monetization_model"] = classify_monetization_model(
-                        price=row_dict.get("price"),
-                        iap_list=iap_list,
-                        free_rank=free_r,
-                        grossing_rank=gross_r,
-                    )
+                    if platform == "android":
+                        has_ads = bool(row_dict.get("has_ads")) if row_dict.get("has_ads") is not None else None
+                        has_iap = bool(row_dict.get("has_iap")) if row_dict.get("has_iap") is not None else None
+                        row_dict["monetization_model"] = classify_android_monetization(
+                            price=row_dict.get("price"),
+                            has_ads=has_ads,
+                            has_iap=has_iap,
+                            grossing_rank=gross_r,
+                        )
+                    else:
+                        row_dict["monetization_model"] = classify_monetization_model(
+                            price=row_dict.get("price"),
+                            iap_list=iap_list,
+                            free_rank=free_r,
+                            grossing_rank=gross_r,
+                        )
 
                 sig = row_dict.get("signal") or "STEADY"
                 row_dict["signal"] = sig
@@ -269,11 +298,23 @@ def get_data_view(
         "selected_date": date,
         "available_dates": available_dates,
         "counts": counts,
+        "platform": platform,
     }
 
 
-def get_game_view(repo: Repository, app_id: str, country: str = 'vn', snapshot_id: str | None = None) -> dict:
+def get_game_view(
+    repo: Repository,
+    app_id: str,
+    country: str = 'vn',
+    snapshot_id: str | None = None,
+    *,
+    platform: str | None = None,
+) -> dict:
     country = country.lower()
+    if not platform:
+        platform = "android" if ("." in app_id and not app_id.isdigit()) else "ios"
+    provider = "google" if platform == "android" else "apple"
+
     with closing(repo._connect()) as conn:
         meta_row = None
         if snapshot_id:
@@ -290,20 +331,20 @@ def get_game_view(repo: Repository, app_id: str, country: str = 'vn', snapshot_i
             meta_row = conn.execute(
                 """
                 SELECT * FROM metadata_versions
-                WHERE provider = 'apple' AND platform = 'ios' AND country = ? AND app_id = ?
+                WHERE provider = ? AND platform = ? AND country = ? AND app_id = ?
                 ORDER BY fetched_at DESC LIMIT 1
                 """,
-                (country, app_id),
+                (provider, platform, country, app_id),
             ).fetchone()
 
         if meta_row is None:
             meta_row = conn.execute(
                 """
                 SELECT * FROM metadata_versions
-                WHERE provider = 'apple' AND platform = 'ios' AND app_id = ?
+                WHERE provider = ? AND platform = ? AND app_id = ?
                 ORDER BY fetched_at DESC LIMIT 1
                 """,
-                (app_id,),
+                (provider, platform, app_id),
             ).fetchone()
 
         entry_row = None
@@ -343,17 +384,17 @@ def get_game_view(repo: Repository, app_id: str, country: str = 'vn', snapshot_i
         else:
             meta_dict["genres"] = []
 
-        rank_history = repo.get_app_rank_history(app_id, country, limit=14)
+        rank_history = repo.get_app_rank_history(app_id, country, limit=14, platform=platform)
 
         latest_analytics = None
         if rank_history:
             an_row = conn.execute(
                 """
                 SELECT * FROM daily_rank_analytics
-                WHERE app_id = ? AND country = ?
+                WHERE app_id = ? AND country = ? AND platform = ?
                 ORDER BY date DESC LIMIT 1
                 """,
-                (app_id, country),
+                (app_id, country, platform),
             ).fetchone()
             if an_row:
                 latest_analytics = dict(an_row)
@@ -402,6 +443,7 @@ def get_game_view(repo: Repository, app_id: str, country: str = 'vn', snapshot_i
         return {
             "app_id": app_id,
             "country": country,
+            "platform": platform,
             "snapshot_id": snapshot_id,
             "entry": dict(entry_row) if entry_row else {},
             "metadata": meta_dict,
@@ -477,8 +519,10 @@ def get_dashboard_view(
     repo: Repository,
     date_str: str | None = None,
     country: str = "all",
+    *,
+    platform: str = "ios",
 ) -> dict[str, Any]:
-    available_dates = repo.get_available_analytics_dates()
+    available_dates = repo.get_available_analytics_dates(platform=platform)
     if not date_str:
         date_str = available_dates[0] if available_dates else datetime.now(UTC).strftime("%Y-%m-%d")
 
@@ -509,10 +553,10 @@ def get_dashboard_view(
                        ) AS developer,
                        (SELECT icon_url FROM entries e WHERE e.app_id = dra.app_id LIMIT 1) AS icon_url
                 FROM daily_rank_analytics dra
-                WHERE dra.date = ? AND dra.country IN ({scope_params})
+                WHERE dra.date = ? AND dra.platform = ? AND dra.country IN ({scope_params})
                 ORDER BY dra.current_rank ASC
                 """,
-                (date_str, *scope),
+                (date_str, platform, *scope),
             ).fetchall()
         else:
             rows = conn.execute(
@@ -529,10 +573,10 @@ def get_dashboard_view(
                        ) AS developer,
                        (SELECT icon_url FROM entries e WHERE e.app_id = dra.app_id LIMIT 1) AS icon_url
                 FROM daily_rank_analytics dra
-                WHERE dra.date = ? AND dra.country = ?
+                WHERE dra.date = ? AND dra.platform = ? AND dra.country = ?
                 ORDER BY dra.current_rank ASC
                 """,
-                (date_str, country.lower()),
+                (date_str, platform, country.lower()),
             ).fetchall()
 
         records = []
@@ -551,11 +595,11 @@ def get_dashboard_view(
             f"""
             SELECT date, subgenre
             FROM daily_rank_analytics
-            WHERE date <= ? AND country IN ({scope_params})
+            WHERE date <= ? AND platform = ? AND country IN ({scope_params})
             ORDER BY date DESC
             LIMIT 7700
             """,
-            (date_str, *scope),
+            (date_str, platform, *scope),
         ).fetchall()
         history_records = [dict(hr) for hr in hist_rows]
         latest_collection = conn.execute(
@@ -564,11 +608,12 @@ def get_dashboard_view(
             FROM runs r
             JOIN market_runs mr ON mr.run_id = r.id
             JOIN charts c ON c.id = mr.chart_id
-            WHERE c.country = 'vn'
+            WHERE c.country = 'vn' AND c.platform = ?
             GROUP BY r.id
             ORDER BY r.started_at DESC
             LIMIT 1
-            """
+            """,
+            (platform,),
         ).fetchone()
 
     genre_dist = compute_genre_distribution(records)
@@ -609,6 +654,7 @@ def get_dashboard_view(
     return {
         "selected_date": date_str,
         "selected_country": country,
+        "platform": platform,
         "legacy_market": legacy_market,
         "available_dates": available_dates or [date_str],
         "markets": markets,

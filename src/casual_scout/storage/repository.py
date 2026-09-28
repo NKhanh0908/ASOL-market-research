@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from casual_scout.config import IOS_COLLECTION_COUNTRIES, IOS_COLLECTION_SCOPE, Settings
 from casual_scout.models import Chart, HttpResult, ParsedChart
+from casual_scout.storage.migrations_android import migrate_android_columns
 from casual_scout.storage.raw import RawStore
 
 _OPEN_RUN_STATUSES = {"queued", "running"}
@@ -64,6 +65,7 @@ class Repository:
         with closing(self._connect()) as connection:
             connection.executescript(schema)
             connection.executescript(ai_schema)
+            migrate_android_columns(connection)
             # Idempotent column migrations for Phase 3.5
             meta_cols = [r[1] for r in connection.execute("PRAGMA table_info(metadata_versions)").fetchall()]
             if "in_app_purchases_json" not in meta_cols:
@@ -447,7 +449,13 @@ class Repository:
 
 
     def save_metadata(
-        self, country: str, values: dict[str, dict], result: HttpResult
+        self,
+        country: str,
+        values: dict[str, dict],
+        result: HttpResult,
+        *,
+        provider: str = "apple",
+        platform: str = "ios",
     ) -> dict[str, str]:
         if result.body is None:
             raise ValueError("metadata response body is required")
@@ -469,25 +477,59 @@ class Repository:
                 if not isinstance(metadata, dict):
                     raise TypeError(f"metadata for {app_id} must be a mapping")
                 app_ref = self._ensure_app(
-                    connection, "apple", "ios", app_id, result.started_at
+                    connection, provider, platform, app_id, result.started_at
                 )
                 existing = connection.execute(
                     """
                     SELECT id FROM metadata_versions
-                    WHERE provider = 'apple' AND platform = 'ios' AND country = ?
+                    WHERE provider = ? AND platform = ? AND country = ?
                       AND app_id = ? AND fetched_at = ? AND raw_hash = ?
                     """,
-                    (country, app_id, fetched_at, final_hash),
+                    (provider, platform, country, app_id, fetched_at, final_hash),
                 ).fetchone()
                 if existing is not None:
                     versions[app_id] = str(existing["id"])
                     continue
 
                 version_id = _uuid()
-                genres = metadata.get("genres") or []
-                iap_list = metadata.get("inAppPurchases") or metadata.get("in_app_purchases") or []
-                has_iap = 1 if len(iap_list) > 0 or metadata.get("hasInAppPurchases") or metadata.get("has_in_app_purchases") else 0
-                monetization_model = metadata.get("monetization_model") or metadata.get("monetizationModel") or "UNKNOWN"
+                if platform == "android":
+                    name = metadata.get("name")
+                    developer = metadata.get("developer")
+                    description = metadata.get("description")
+                    rating = metadata.get("average_rating")
+                    rating_count = metadata.get("rating_count")
+                    price = metadata.get("price")
+                    currency = metadata.get("currency")
+                    store_url = metadata.get("store_url")
+                    installs = metadata.get("installs")
+                    min_installs = metadata.get("min_installs")
+                    if isinstance(min_installs, bool):
+                        min_installs = None
+                    has_ads = 1 if metadata.get("has_ads") is True else (0 if metadata.get("has_ads") is False else None)
+                    has_iap = 1 if metadata.get("has_iap") is True else (0 if metadata.get("has_iap") is False else None)
+                    genres = metadata.get("genres") or []
+                    primary_genre = genres[0]["name"] if genres and isinstance(genres[0], dict) and "name" in genres[0] else "Casual"
+                    status = metadata.get("status", "complete")
+                    monetization_model = metadata.get("monetization_model") or "UNKNOWN"
+                    iap_list = []
+                else:
+                    name = metadata.get("trackName")
+                    developer = metadata.get("artistName") or metadata.get("sellerName")
+                    description = metadata.get("description")
+                    rating = metadata.get("averageUserRating")
+                    rating_count = metadata.get("userRatingCount")
+                    price = metadata.get("price")
+                    currency = metadata.get("currency")
+                    store_url = metadata.get("trackViewUrl")
+                    installs = None
+                    min_installs = None
+                    has_ads = None
+                    genres = metadata.get("genres") or []
+                    primary_genre = metadata.get("primaryGenreName")
+                    iap_list = metadata.get("inAppPurchases") or metadata.get("in_app_purchases") or []
+                    has_iap = 1 if len(iap_list) > 0 or metadata.get("hasInAppPurchases") or metadata.get("has_in_app_purchases") else 0
+                    status = "complete"
+                    monetization_model = metadata.get("monetization_model") or metadata.get("monetizationModel") or "UNKNOWN"
 
                 connection.execute(
                     """
@@ -495,30 +537,38 @@ class Repository:
                         (id, app_ref, provider, platform, country, app_id, fetched_at,
                          status, raw_hash, name, developer, primary_genre, genres_json,
                          description, average_rating, rating_count, store_url, price,
-                         currency, in_app_purchases_json, has_in_app_purchases, monetization_model, values_json)
-                    VALUES (?, ?, 'apple', 'ios', ?, ?, ?, 'complete', ?, ?, ?, ?, ?,
-                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         currency, in_app_purchases_json, has_in_app_purchases, monetization_model,
+                         installs, min_installs, has_ads, has_iap, values_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         version_id,
                         app_ref,
+                        provider,
+                        platform,
                         country,
                         app_id,
                         fetched_at,
+                        status,
                         final_hash,
-                        metadata.get("trackName"),
-                        metadata.get("artistName") or metadata.get("sellerName"),
-                        metadata.get("primaryGenreName"),
+                        name,
+                        developer,
+                        primary_genre,
                         json.dumps(genres, ensure_ascii=False, sort_keys=True),
-                        metadata.get("description"),
-                        metadata.get("averageUserRating"),
-                        metadata.get("userRatingCount"),
-                        metadata.get("trackViewUrl"),
-                        metadata.get("price"),
-                        metadata.get("currency"),
+                        description,
+                        rating,
+                        rating_count,
+                        store_url,
+                        price,
+                        currency,
                         json.dumps(iap_list, ensure_ascii=False, sort_keys=True),
                         has_iap,
                         monetization_model,
+                        installs,
+                        min_installs,
+                        has_ads,
+                        has_iap,
                         json.dumps(metadata, ensure_ascii=False, sort_keys=True),
                     ),
                 )
@@ -528,12 +578,19 @@ class Repository:
         return versions
 
     def cached_metadata(
-        self, country: str, app_ids: list[str], now: datetime
+        self,
+        country: str,
+        app_ids: list[str],
+        now: datetime,
+        *,
+        provider: str = "apple",
+        platform: str = "ios",
     ) -> dict[str, str]:
         if not app_ids:
             return {}
+        ttl_hours = 48 if platform == "android" else 24
         now_text = _utc_text(now)
-        fresh_after = _utc_text(now.astimezone(UTC) - timedelta(hours=24))
+        fresh_after = _utc_text(now.astimezone(UTC) - timedelta(hours=ttl_hours))
         unique_ids = list(dict.fromkeys(app_ids))
         placeholders = ", ".join("?" for _ in unique_ids)
         query = f"""
@@ -544,7 +601,7 @@ class Repository:
                            PARTITION BY app_id ORDER BY fetched_at DESC, id DESC
                        ) AS newest
                 FROM metadata_versions
-                WHERE provider = 'apple' AND platform = 'ios' AND country = ?
+                WHERE provider = ? AND platform = ? AND country = ?
                   AND status = 'complete' AND fetched_at >= ? AND fetched_at <= ?
                   AND app_id IN ({placeholders})
             )
@@ -552,7 +609,7 @@ class Repository:
         """
         with closing(self._connect()) as connection:
             rows = connection.execute(
-                query, (country.lower(), fresh_after, now_text, *unique_ids)
+                query, (provider, platform, country.lower(), fresh_after, now_text, *unique_ids)
             ).fetchall()
         return {row["app_id"]: row["id"] for row in rows}
 
@@ -636,7 +693,8 @@ class Repository:
                        mv.genres_json, mv.description, mv.average_rating,
                        mv.rating_count, mv.store_url, mv.price, mv.currency,
                        mv.in_app_purchases_json, mv.has_in_app_purchases,
-                       mv.monetization_model
+                       mv.monetization_model, mv.installs, mv.min_installs,
+                       mv.has_ads, mv.has_iap, mv.status
                 FROM snapshot_metadata sm
                 JOIN metadata_versions mv ON mv.id = sm.metadata_version_id
                 WHERE sm.snapshot_id = ?
@@ -658,44 +716,87 @@ class Repository:
         return result
 
     def save_canonical_snapshot(
-        self, date_str: str, country: str, snapshot_id: str, observed_at: str
+        self,
+        date_str: str,
+        country: str,
+        snapshot_id: str,
+        observed_at: str,
+        *,
+        platform: str = "ios",
+        feed_type: str = "top-free",
     ) -> None:
         country_norm = country.lower()
         now = _utc_text(datetime.now(UTC))
         with self._write_connection() as connection:
+            if platform == "ios":
+                connection.execute(
+                    """
+                    INSERT INTO daily_canonical_snapshots (date, country, snapshot_id, observed_at, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(date, country) DO UPDATE SET
+                        snapshot_id = excluded.snapshot_id,
+                        observed_at = excluded.observed_at,
+                        created_at = excluded.created_at
+                    """,
+                    (date_str, country_norm, snapshot_id, observed_at, now),
+                )
             connection.execute(
                 """
-                INSERT INTO daily_canonical_snapshots (date, country, snapshot_id, observed_at, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(date, country) DO UPDATE SET
+                INSERT INTO platform_canonical_snapshots (date, platform, country, feed_type, snapshot_id, observed_at, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(date, platform, country, feed_type) DO UPDATE SET
                     snapshot_id = excluded.snapshot_id,
                     observed_at = excluded.observed_at,
                     created_at = excluded.created_at
                 """,
-                (date_str, country_norm, snapshot_id, observed_at, now),
+                (date_str, platform, country_norm, feed_type, snapshot_id, observed_at, now),
             )
 
     def get_canonical_snapshot(
-        self, date_str: str, country: str
+        self,
+        date_str: str,
+        country: str,
+        *,
+        platform: str = "ios",
+        feed_type: str = "top-free",
     ) -> dict[str, Any] | None:
         country_norm = country.lower()
         with closing(self._connect()) as connection:
             row = connection.execute(
                 """
-                SELECT date, country, snapshot_id, observed_at, created_at
-                FROM daily_canonical_snapshots
-                WHERE date = ? AND country = ?
+                SELECT date, platform, country, feed_type, snapshot_id, observed_at, created_at
+                FROM platform_canonical_snapshots
+                WHERE date = ? AND platform = ? AND country = ? AND feed_type = ?
                 """,
-                (date_str, country_norm),
+                (date_str, platform, country_norm, feed_type),
             ).fetchone()
-            if row is None:
-                return None
-            return dict(row)
+            if row is not None:
+                return dict(row)
+            if platform == "ios":
+                legacy = connection.execute(
+                    """
+                    SELECT date, country, snapshot_id, observed_at, created_at
+                    FROM daily_canonical_snapshots
+                    WHERE date = ? AND country = ?
+                    """,
+                    (date_str, country_norm),
+                ).fetchone()
+                if legacy is not None:
+                    d = dict(legacy)
+                    d["platform"] = "ios"
+                    d["feed_type"] = "top-free"
+                    return d
+            return None
 
     def find_latest_complete_snapshot_for_date(
-        self, date_str: str, country: str, collection: str | None = None
+        self,
+        date_str: str,
+        country: str,
+        collection: str | None = None,
+        *,
+        platform: str = "ios",
     ) -> dict[str, Any] | None:
-        """Find the latest complete snapshot observed on date_str (UTC YYYY-MM-DD) for country and optional collection."""
+        """Find the latest complete snapshot observed on date_str (UTC YYYY-MM-DD) for country, platform and optional collection."""
         country_norm = country.lower()
         day_start = f"{date_str}T00:00:00Z"
         day_end = f"{date_str}T23:59:59.999999Z"
@@ -704,10 +805,10 @@ class Repository:
             FROM snapshots
             JOIN market_runs ON market_runs.id = snapshots.market_run_id
             JOIN charts ON charts.id = market_runs.chart_id
-            WHERE charts.country = ? AND snapshots.quality = 'complete'
+            WHERE charts.country = ? AND charts.platform = ? AND snapshots.quality = 'complete'
               AND snapshots.observed_at >= ? AND snapshots.observed_at <= ?
         """
-        params: list[Any] = [country_norm, day_start, day_end]
+        params: list[Any] = [country_norm, platform, day_start, day_end]
         if collection:
             query += " AND charts.collection = ?"
             params.append(collection)
@@ -750,8 +851,9 @@ class Repository:
                         subgenre, mechanic, mechanic_evidence, mechanic_confidence,
                         cross_market_count, cross_markets_json,
                         grossing_rank, free_rank, monetization_model, monetization_efficiency_flag,
+                        platform, installs, min_installs,
                         created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(date, country, app_id) DO UPDATE SET
                         current_rank = excluded.current_rank,
                         rank_1d_ago = excluded.rank_1d_ago,
@@ -772,7 +874,11 @@ class Repository:
                         free_rank = excluded.free_rank,
                         monetization_model = excluded.monetization_model,
                         monetization_efficiency_flag = excluded.monetization_efficiency_flag,
+                        platform = excluded.platform,
+                        installs = excluded.installs,
+                        min_installs = excluded.min_installs,
                         created_at = excluded.created_at
+                    WHERE daily_rank_analytics.platform = excluded.platform
                     """,
                     (
                         rec_id,
@@ -798,12 +904,15 @@ class Repository:
                         rec.get("free_rank"),
                         rec.get("monetization_model") or "PURE_ADS",
                         rec.get("monetization_efficiency_flag"),
+                        rec.get("platform", "ios"),
+                        rec.get("installs"),
+                        rec.get("min_installs"),
                         created_at,
                     ),
                 )
 
     def get_daily_analytics(
-        self, date_str: str, country: str, signal: str | None = None
+        self, date_str: str, country: str, signal: str | None = None, *, platform: str = "ios"
     ) -> list[dict[str, Any]]:
         country_norm = country.lower()
         query = """
@@ -815,11 +924,12 @@ class Repository:
                    subgenre, mechanic, mechanic_evidence, mechanic_confidence,
                    cross_market_count, cross_markets_json,
                    grossing_rank, free_rank, monetization_model, monetization_efficiency_flag,
+                   platform, installs, min_installs,
                    created_at
             FROM daily_rank_analytics
-            WHERE date = ? AND country = ?
+            WHERE date = ? AND country = ? AND platform = ?
         """
-        params: list[Any] = [date_str, country_norm]
+        params: list[Any] = [date_str, country_norm, platform]
         if signal:
             query += " AND signal = ?"
             params.append(signal)
@@ -845,7 +955,7 @@ class Repository:
         return results
 
     def get_app_rank_history(
-        self, app_id: str, country: str, limit: int = 14
+        self, app_id: str, country: str, limit: int = 14, *, platform: str = "ios"
     ) -> list[dict[str, Any]]:
         country_norm = country.lower()
         with closing(self._connect()) as connection:
@@ -857,13 +967,14 @@ class Repository:
                        rank_7d_ago, delta_7d,
                        signal, subgenre, mechanic, mechanic_confidence,
                        cross_market_count,
-                       grossing_rank, free_rank, monetization_model, monetization_efficiency_flag
+                       grossing_rank, free_rank, monetization_model, monetization_efficiency_flag,
+                       platform, installs, min_installs
                 FROM daily_rank_analytics
-                WHERE app_id = ? AND country = ?
+                WHERE app_id = ? AND country = ? AND platform = ?
                 ORDER BY date DESC
                 LIMIT ?
                 """,
-                (str(app_id), country_norm, limit),
+                (str(app_id), country_norm, platform, limit),
             ).fetchall()
         return [dict(r) for r in rows]
 
@@ -972,10 +1083,11 @@ class Repository:
             )
             return cursor.rowcount > 0
 
-    def get_available_analytics_dates(self) -> list[str]:
+    def get_available_analytics_dates(self, *, platform: str = "ios") -> list[str]:
         with closing(self._connect()) as connection:
             rows = connection.execute(
-                "SELECT DISTINCT date FROM daily_rank_analytics ORDER BY date DESC"
+                "SELECT DISTINCT date FROM daily_rank_analytics WHERE platform = ? ORDER BY date DESC",
+                (platform,),
             ).fetchall()
             return [r["date"] for r in rows]
 

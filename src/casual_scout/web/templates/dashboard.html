@@ -5,11 +5,22 @@
 {% block content %}
 <div class="dashboard-header page-toolbar">
   <div>
-    <h1 class="page-heading">Tổng quan thị trường</h1>
+    <h1 class="page-heading">Tổng quan thị trường ({% if platform == 'android' %}Android{% else %}iOS{% endif %})</h1>
     <p class="page-lede">Cơ hội game Casual và tín hiệu thị trường ASEAN + US.</p>
   </div>
   
   <form method="GET" action="/dashboard" class="page-toolbar dashboard-filter-form">
+    <div class="platform-switcher" role="tablist" aria-label="Nền tảng">
+      <a href="/dashboard?country={{ selected_country }}&date={{ selected_date }}&platform=ios"
+         class="platform-tab{% if platform != 'android' %} active{% endif %}">
+        🍎 Apple iOS
+      </a>
+      <a href="/dashboard?country={{ selected_country }}&date={{ selected_date }}&platform=android"
+         class="platform-tab{% if platform == 'android' %} active{% endif %}">
+        🤖 Google Android
+      </a>
+    </div>
+    <input type="hidden" name="platform" value="{{ platform or 'ios' }}">
     <div class="control-field">
       <label for="date-select">Ngày dữ liệu</label>
       <select id="date-select" name="date" onchange="this.form.submit()">
@@ -36,11 +47,12 @@
 <section class="card collection-panel" aria-labelledby="collection-panel-title">
   <div style="display: flex; justify-content: space-between; align-items: start; gap: 1rem; flex-wrap: wrap;">
     <div>
-      <h2 id="collection-panel-title">Thu thập iOS · {{ ios_collection_count }} thị trường</h2>
+      <h2 id="collection-panel-title">Thu thập {% if platform == 'android' %}Android{% else %}iOS{% endif %} · {{ ios_collection_count }} thị trường</h2>
       <p>Top Free Casual · {{ ios_collection_label }}.</p>
     </div>
     <form method="POST" action="/runs" class="collection-action">
       <input type="hidden" name="country" value="{{ ios_collection_scope }}">
+      <input type="hidden" name="platform" value="{{ platform or 'ios' }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button type="submit" class="btn">Crawl ngay · {{ ios_collection_count }} thị trường</button>
     </form>
@@ -148,8 +160,8 @@
       <p class="notice">Hiện diện tính trên BXH Top Free iOS hoàn chỉnh cùng ngày UTC, không phải thị phần. So sánh chỉ dùng thị trường có dữ liệu ở cả hai mốc.</p>
     </div>
     <div style="display: flex; gap: 0.5rem;">
-      <a href="/api/export/radar?format=csv&date={{ selected_date }}&country={{ selected_country }}" class="btn btn-secondary">Xuất CSV</a>
-      <a href="/api/export/radar?format=json&date={{ selected_date }}&country={{ selected_country }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Xuất JSON</a>
+      <a href="/api/export/radar?format=csv&date={{ selected_date }}&country={{ selected_country }}&platform={{ platform or 'ios' }}" class="btn btn-secondary">Xuất CSV</a>
+      <a href="/api/export/radar?format=json&date={{ selected_date }}&country={{ selected_country }}&platform={{ platform or 'ios' }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Xuất JSON</a>
     </div>
   </div>
 
@@ -178,7 +190,7 @@
           
           <td style="padding: 0.75rem;">
             <div style="font-weight: 600;">
-              <a href="/games/{{ item.country }}/{{ item.app_id }}" style="color: inherit; text-decoration: none;">{{ item.title or item.app_id }}</a>
+              <a href="/games/{{ item.country }}/{{ item.app_id }}?platform={{ platform or 'ios' }}" style="color: inherit; text-decoration: none;">{{ item.title or item.app_id }}</a>
             </div>
             <div style="font-size: 0.75rem; color: var(--text-muted);">{{ item.developer or '—' }} ({{ item.country | upper }})</div>
           </td>

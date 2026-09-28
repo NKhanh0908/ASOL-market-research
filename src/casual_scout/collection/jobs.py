@@ -81,6 +81,8 @@ class JobService:
         countries: list[str],
         request_key: str,
         chart_types: list[str] | None = None,
+        *,
+        platform: str = "ios",
     ) -> str:
         if not countries:
             raise ValueError("countries list must not be empty")
@@ -113,11 +115,22 @@ class JobService:
 
             for country in countries:
                 for feed in feeds:
-                    chart = Chart(country.lower(), feed_type=feed)
-                    chart_endpoint = (
-                        f"https://itunes.apple.com/{chart.country}/rss/{chart.collection}/"
-                        f"limit={chart.depth}/genre={chart.genre}/json"
-                    )
+                    if platform == "android":
+                        from casual_scout.providers.google import chart_url
+                        chart = Chart(
+                            country.lower(),
+                            provider="google",
+                            platform="android",
+                            genre="GAME_CASUAL",
+                            feed_type=feed,
+                        )
+                        chart_endpoint = chart_url(chart)
+                    else:
+                        chart = Chart(country.lower(), feed_type=feed)
+                        chart_endpoint = (
+                            f"https://itunes.apple.com/{chart.country}/rss/{chart.collection}/"
+                            f"limit={chart.depth}/genre={chart.genre}/json"
+                        )
                     chart_id = self.repo._ensure_chart(conn, chart, chart_endpoint)
                     self.repo._ensure_market_run(conn, run_id, chart_id, now_dt)
 

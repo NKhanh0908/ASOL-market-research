@@ -34,6 +34,12 @@ _ALLOWED_COUNTRIES = {
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
     parser = argparse.ArgumentParser(
         prog="casual_scout",
         description="Casual Scout — iOS Casual Games Market Collection Tool",
@@ -80,6 +86,13 @@ def main(argv: list[str] | None = None) -> int:
         default="all",
         choices=["all", "free", "grossing", "top-free", "top-grossing"],
         help="Chart types to collect: all, free, grossing (default: all)",
+    )
+    collect_parser.add_argument(
+        "--platform",
+        "-p",
+        choices=["all", "ios", "android"],
+        default="ios",
+        help="Target platform: ios, android, or all (default: ios)",
     )
 
 
@@ -213,6 +226,13 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("data"),
         help="Path to data directory",
     )
+    analyze_parser.add_argument(
+        "--platform",
+        "-p",
+        choices=["ios", "android"],
+        default="ios",
+        help="Platform to analyze: ios or android (default: ios)",
+    )
 
     # trends
     trends_parser = subparsers.add_parser("trends", help="Query daily trend rankings and signals")
@@ -242,6 +262,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Chart to query: free or grossing (default: free)",
     )
     trends_parser.add_argument(
+        "--platform",
+        "-p",
+        choices=["ios", "android"],
+        default="ios",
+        help="Platform to query: ios or android (default: ios)",
+    )
+    trends_parser.add_argument(
         "--json",
         action="store_true",
         help="Output raw JSON instead of table",
@@ -262,6 +289,13 @@ def main(argv: list[str] | None = None) -> int:
     stats_overview_parser = stats_subparsers.add_parser("overview", help="Show market summary and distribution")
     stats_overview_parser.add_argument("--date", type=str, default=datetime.now(UTC).strftime("%Y-%m-%d"), help="Target date YYYY-MM-DD")
     stats_overview_parser.add_argument("--country", type=str, default="all", help="Country code or 'all'")
+    stats_overview_parser.add_argument(
+        "--platform",
+        "-p",
+        choices=["ios", "android"],
+        default="ios",
+        help="Platform to inspect: ios or android (default: ios)",
+    )
     stats_overview_parser.add_argument("--data-dir", type=Path, default=Path("data"), help="Path to data directory")
     stats_overview_parser.add_argument("--json", action="store_true", help="Output raw JSON")
 
@@ -271,6 +305,13 @@ def main(argv: list[str] | None = None) -> int:
     stats_radar_parser.add_argument("--country", type=str, default="all", help="Country code or 'all'")
     stats_radar_parser.add_argument("--limit", type=int, default=20, help="Number of games to show")
     stats_radar_parser.add_argument("--monetization", type=str, default=None, help="Filter by monetization model (PURE_IAP, HYBRID, PURE_ADS, PAID_PREMIUM)")
+    stats_radar_parser.add_argument(
+        "--platform",
+        "-p",
+        choices=["ios", "android"],
+        default="ios",
+        help="Platform to score: ios or android (default: ios)",
+    )
     stats_radar_parser.add_argument("--data-dir", type=Path, default=Path("data"), help="Path to data directory")
     stats_radar_parser.add_argument("--json", action="store_true", help="Output raw JSON")
 
@@ -322,65 +363,65 @@ def main(argv: list[str] | None = None) -> int:
 
         repo = Repository(args.data_dir)
         repo.initialize()
-        jobs = JobService(repo)
-        req_key = f"cli-collect-{uuid4()}"
-        run_id = jobs.submit("manual", country_list, req_key, chart_types=chart_types)
 
-        settings = Settings(args.data_dir)
-        provider = AppleProvider(settings)
-        collector = Collector(repo, provider, jobs)
+        from casual_scout.collection import platforms
+
         def _log_progress(msg: str) -> None:
             sys.stdout.write(f"{msg}\n")
             sys.stdout.flush()
 
-        sys.stdout.write(f"🚀 Bắt đầu thu thập dữ liệu (Run ID: {run_id})\n")
-        sys.stdout.write(f"   Thị trường ({len(country_list)}): {', '.join(c.upper() for c in country_list)}\n")
-        chart_label = getattr(args, 'chart_type', 'all')
-        sys.stdout.write(f"   Loại chart: {chart_label.upper()}\n")
-        sys.stdout.write(f"   Làm giàu metadata: {'BẬT' if not args.no_enrich else 'TẮT (--no-enrich)'}\n\n")
-        sys.stdout.flush()
+        statuses = []
+        for target_plat in platforms.selected_platforms(getattr(args, "platform", "ios")):
+            sys.stdout.write(f"\n🚀 Bắt đầu thu thập dữ liệu [Platform: {target_plat.upper()}]\n")
+            sys.stdout.write(f"   Thị trường ({len(country_list)}): {', '.join(c.upper() for c in country_list)}\n")
+            chart_label = getattr(args, "chart_type", "all")
+            sys.stdout.write(f"   Loại chart: {chart_label.upper()}\n")
+            sys.stdout.write(f"   Làm giàu metadata: {'BẬT' if not args.no_enrich else 'TẮT (--no-enrich)'}\n\n")
+            sys.stdout.flush()
 
-        status = collector.execute(run_id, enrich=not args.no_enrich, on_progress=_log_progress)
-        sys.stdout.write(f"\n✅ Hoàn thành thu thập (Run ID: {run_id}) với trạng thái: {status.upper()}\n")
-        sys.stdout.flush()
-        return 0 if status in ("succeeded", "partial") else 1
+            req_key = f"cli-collect-{target_plat}-{uuid4()}"
+            run_id, status = platforms.collect_platform(
+                repo,
+                target_plat,
+                country_list,
+                chart_types or ["top-free"],
+                req_key,
+                enrich=not args.no_enrich,
+                on_progress=_log_progress,
+            )
+            statuses.append(status)
+            sys.stdout.write(f"\n✅ Hoàn thành thu thập {target_plat.upper()} (Run ID: {run_id}) với trạng thái: {status.upper()}\n")
+            sys.stdout.flush()
+
+        return 1 if any(s in ("failed", "interrupted") for s in statuses) else 0
 
     if args.command == "work":
         repo = Repository(args.data_dir)
         repo.initialize()
-        jobs = JobService(repo)
-        settings = Settings(args.data_dir)
-        provider = AppleProvider(settings)
-        collector = Collector(repo, provider, jobs)
-        status = collector.execute(args.run_id, enrich=not args.no_enrich)
+        from casual_scout.collection import platforms
+        status = platforms.execute_run(repo, args.run_id, enrich=not args.no_enrich)
         return 0 if status in ("succeeded", "partial") else 1
 
     if args.command == "pipeline":
         repo = Repository(args.data_dir)
         repo.initialize()
-        jobs = JobService(repo)
-        settings = Settings(args.data_dir)
-        provider = AppleProvider(settings)
-        collector = Collector(repo, provider, jobs)
-        status = collector.execute(args.run_id, enrich=not args.no_enrich)
+        from casual_scout.collection import platforms
+        status = platforms.execute_run(repo, args.run_id, enrich=not args.no_enrich)
         if status not in ("succeeded", "partial"):
             return 1
-        # Analyze only complete observations from this run, on their actual UTC days.
-        # Multi-market collection may cross midnight; wall-clock completion is not its scope.
         with closing(repo._connect()) as connection:
             observed = connection.execute(
-                """SELECT DISTINCT substr(s.observed_at,1,10) AS day, c.country
+                """SELECT DISTINCT substr(s.observed_at,1,10) AS day, c.platform, c.country
                    FROM snapshots s JOIN market_runs mr ON mr.id=s.market_run_id
                    JOIN charts c ON c.id=mr.chart_id
                    WHERE mr.run_id=? AND s.quality='complete'
-                     AND c.provider='apple' AND c.platform='ios'
-                   ORDER BY day, c.country""", (args.run_id,),
+                   ORDER BY day, c.platform, c.country""", (args.run_id,),
             ).fetchall()
-        countries_by_day: dict[str, list[str]] = {}
+        groups: dict[tuple[str, str], list[str]] = {}
         for row in observed:
-            countries_by_day.setdefault(row['day'], []).append(row['country'])
-        for day, countries in countries_by_day.items():
-            AnalysisService(repo).analyze_date(day, countries)
+            groups.setdefault((row['day'], row['platform']), []).append(row['country'])
+        for (day, plat), countries in groups.items():
+            AnalysisService(repo).analyze_date(day, countries, platform=plat)
         return 0
 
     if args.command == "serve":
@@ -457,9 +498,10 @@ def main(argv: list[str] | None = None) -> int:
             if args.countries
             else None
         )
-        result = service.analyze_date(args.date, country_list)
+        target_platform = getattr(args, "platform", "ios")
+        result = service.analyze_date(args.date, country_list, platform=target_platform)
         sys.stdout.write(
-            f"Analyzed {args.date} across {len(result['markets'])} markets: {', '.join(result['markets'])}\n"
+            f"Analyzed {args.date} [{target_platform.upper()}] across {len(result['markets'])} markets: {', '.join(result['markets'])}\n"
         )
         return 0
 
@@ -467,6 +509,7 @@ def main(argv: list[str] | None = None) -> int:
         repo = Repository(args.data_dir)
         repo.initialize()
         is_grossing = args.chart_type in ("grossing", "top-grossing")
+        target_platform = getattr(args, "platform", "ios")
         signal_filter = None
         if args.signal:
             s = args.signal.strip().upper()
@@ -483,8 +526,9 @@ def main(argv: list[str] | None = None) -> int:
             if args.signal:
                 sys.stderr.write("Error: --signal is only available for Top Free trends\n")
                 return 1
+            grossing_col = "top-grossing" if target_platform == "android" else "topgrossingapplications"
             snapshot_ref = repo.find_latest_complete_snapshot_for_date(
-                args.date, args.country, collection="topgrossingapplications"
+                args.date, args.country, collection=grossing_col, platform=target_platform
             )
             if snapshot_ref is None:
                 records = []
@@ -500,7 +544,9 @@ def main(argv: list[str] | None = None) -> int:
                     for entry in snapshot["entries"]
                 ]
         else:
-            records = repo.get_daily_analytics(args.date, args.country, signal_filter)
+            records = repo.get_daily_analytics(
+                args.date, args.country, signal_filter, platform=target_platform
+            )
 
         if args.json:
             sys.stdout.write(json.dumps(records, indent=2, ensure_ascii=False) + "\n")
@@ -508,7 +554,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if is_grossing:
             md_lines = [
-                f"# Top Grossing Rankings for {args.country.upper()} on {args.date}",
+                f"# Top Grossing Rankings for {args.country.upper()} on {args.date} [{target_platform.upper()}]",
                 f"Total records: **{len(records)}**",
                 "",
                 "| Rank | App ID | Title |",
@@ -521,7 +567,7 @@ def main(argv: list[str] | None = None) -> int:
 
         # Output readable Top Free trend table
         md_lines = [
-            f"# Daily Trends for {args.country.upper()} on {args.date}",
+            f"# Daily Trends for {args.country.upper()} on {args.date} [{target_platform.upper()}]",
             f"Total records: **{len(records)}**",
             "",
             "| Rank | Delta 1D | Delta 3D | App ID | Signal | Mechanic | Cross-Markets |",
@@ -542,7 +588,8 @@ def main(argv: list[str] | None = None) -> int:
         repo = Repository(args.data_dir)
         repo.initialize()
         from casual_scout.web.views import get_dashboard_view
-        data = get_dashboard_view(repo, date_str=args.date, country=args.country)
+        target_platform = getattr(args, "platform", "ios")
+        data = get_dashboard_view(repo, date_str=args.date, country=args.country, platform=target_platform)
         
         if args.stats_command == "overview":
             if args.json:

@@ -8,6 +8,7 @@ from casual_scout.analysis.delta import (
     compute_rank_deltas,
 )
 from casual_scout.analysis.monetization import (
+    classify_android_monetization,
     classify_monetization_model,
     compute_monetization_efficiency,
 )
@@ -21,30 +22,43 @@ class AnalysisService:
         self.repository = repository
 
     def analyze_date(
-        self, date_str: str, countries: list[str] | None = None
+        self, date_str: str, countries: list[str] | None = None, *, platform: str = "ios"
     ) -> dict[str, Any]:
-        """Perform daily analysis for date_str (YYYY-MM-DD UTC) across specified or all markets."""
+        """Perform daily analysis for date_str (YYYY-MM-DD UTC) across specified or all markets for a given platform."""
         target_date = date.fromisoformat(date_str)
 
         if countries:
             target_countries = [c.lower() for c in countries]
         else:
-            target_countries = [
-                'vn', 'us', 'bn', 'kh', 'id', 'la', 'my', 'mm', 'ph', 'sg', 'th'
-            ]
+            if platform == "android":
+                target_countries = ["vn", "th", "id", "my", "ph", "sg", "la", "kh", "us"]
+            else:
+                target_countries = [
+                    "vn", "us", "bn", "kh", "id", "la", "my", "mm", "ph", "sg", "th"
+                ]
+
+        free_collection = "top-free" if platform == "android" else "topfreeapplications"
+        grossing_collection = "top-grossing" if platform == "android" else "topgrossingapplications"
 
         canonical_snapshots: dict[str, dict[str, Any]] = {}
         for country in target_countries:
-            canonical = self.repository.get_canonical_snapshot(date_str, country)
+            canonical = self.repository.get_canonical_snapshot(
+                date_str, country, platform=platform, feed_type="top-free"
+            )
             if canonical is None:
                 latest = self.repository.find_latest_complete_snapshot_for_date(
-                    date_str, country, collection="topfreeapplications"
+                    date_str, country, collection=free_collection, platform=platform
                 ) or self.repository.find_latest_complete_snapshot_for_date(
-                    date_str, country
+                    date_str, country, platform=platform
                 )
                 if latest is not None:
                     self.repository.save_canonical_snapshot(
-                        date_str, country, latest['id'], latest['observed_at']
+                        date_str,
+                        country,
+                        latest['id'],
+                        latest['observed_at'],
+                        platform=platform,
+                        feed_type="top-free",
                     )
                     canonical = {
                         'date': date_str,
@@ -75,7 +89,7 @@ class AnalysisService:
             # Check for Top Grossing snapshot on same date/country
             grossing_entries_map: dict[str, int] = {}
             grossing_latest = self.repository.find_latest_complete_snapshot_for_date(
-                date_str, country, collection="topgrossingapplications"
+                date_str, country, collection=grossing_collection, platform=platform
             )
             if grossing_latest is not None:
                 grossing_snap = self.repository.get_snapshot(grossing_latest['id'])
@@ -89,14 +103,14 @@ class AnalysisService:
                     target_date - timedelta(days=days_ago)
                 ).isoformat()
                 past_canonical = self.repository.get_canonical_snapshot(
-                    past_date_str, country
+                    past_date_str, country, platform=platform, feed_type="top-free"
                 )
                 if past_canonical is None:
                     past_latest = (
                         self.repository.find_latest_complete_snapshot_for_date(
-                            past_date_str, country, collection="topfreeapplications"
+                            past_date_str, country, collection=free_collection, platform=platform
                         ) or self.repository.find_latest_complete_snapshot_for_date(
-                            past_date_str, country
+                            past_date_str, country, platform=platform
                         )
                     )
                     if past_latest is not None:
@@ -105,6 +119,8 @@ class AnalysisService:
                             country,
                             past_latest['id'],
                             past_latest['observed_at'],
+                            platform=platform,
+                            feed_type="top-free",
                         )
                         past_canonical = {
                             'date': past_date_str,
@@ -159,13 +175,23 @@ class AnalysisService:
                 )
 
                 price = meta.get('price', 0.0)
-                iap_list = meta.get('inAppPurchases') or meta.get('in_app_purchases') or []
-                monetization_model = classify_monetization_model(
-                    price=price,
-                    iap_list=iap_list,
-                    free_rank=free_rank,
-                    grossing_rank=grossing_rank,
-                )
+                if platform == "android":
+                    has_ads = bool(meta.get("has_ads")) if meta.get("has_ads") is not None else None
+                    has_iap = bool(meta.get("has_iap")) if meta.get("has_iap") is not None else None
+                    monetization_model = classify_android_monetization(
+                        price=price,
+                        has_ads=has_ads,
+                        has_iap=has_iap,
+                        grossing_rank=grossing_rank,
+                    )
+                else:
+                    iap_list = meta.get('inAppPurchases') or meta.get('in_app_purchases') or []
+                    monetization_model = classify_monetization_model(
+                        price=price,
+                        iap_list=iap_list,
+                        free_rank=free_rank,
+                        grossing_rank=grossing_rank,
+                    )
                 monetization_efficiency_flag = compute_monetization_efficiency(
                     free_rank=free_rank,
                     grossing_rank=grossing_rank,
@@ -197,6 +223,9 @@ class AnalysisService:
                     'free_rank': free_rank,
                     'monetization_model': monetization_model,
                     'monetization_efficiency_flag': monetization_efficiency_flag,
+                    'platform': platform,
+                    'installs': meta.get('installs'),
+                    'min_installs': meta.get('min_installs'),
                 })
 
             self.repository.save_daily_analytics(daily_records)

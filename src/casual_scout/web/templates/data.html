@@ -6,11 +6,13 @@
 <div class="card data-controls">
     <div class="data-title-row">
       <div>
-        <h1 class="page-heading">iOS · Top 100 {% if feed_type == 'top-grossing' %}Grossing{% else %}Free{% endif %}</h1>
+        <h1 class="page-heading">{% if platform == 'android' %}Android{% else %}iOS{% endif %} · Top 100 {% if feed_type == 'top-grossing' %}Grossing{% else %}Free{% endif %}</h1>
         <p class="page-lede">Casual Games · {{ current_market.name }}</p>
       <div class="notice">
-        <span class="badge badge-complete">Casual theo Apple</span>
-        {% if feed_type == 'top-grossing' %}
+        <span class="badge badge-complete">Casual theo {% if platform == 'android' %}Google Play{% else %}Apple{% endif %}</span>
+        {% if platform == 'android' %}
+          <span class="badge badge-model">⚡ Có số lượt tải (Installs)</span>
+        {% elif feed_type == 'top-grossing' %}
           <span class="monetization-callout">Doanh thu cao nhất (Top Grossing)</span>
         {% else %}
           <span style="margin-left: 0.5rem;">⚠️ Không có số lượt tải</span>
@@ -24,22 +26,33 @@
     <form method="POST" action="/runs" class="collection-action">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="country" value="{{ ios_collection_scope }}">
-      <input type="hidden" name="request_key" value="manual-{{ ios_collection_scope }}-{{ now_key }}">
-      <button type="submit" class="btn">Crawl ngay · {{ ios_collection_count }} thị trường</button>
+      <input type="hidden" name="platform" value="{{ platform or 'ios' }}">
+      <input type="hidden" name="request_key" value="manual-{{ platform or 'ios' }}-{{ ios_collection_scope }}-{{ now_key }}">
+      <button type="submit" class="btn">Crawl {% if platform == 'android' %}Android{% else %}iOS{% endif %} · {{ ios_collection_count }} thị trường</button>
     </form>
   </div>
 
   <p class="toolbar-note">Một lượt crawl Top Free Casual thu thập lần lượt {{ ios_collection_count }} thị trường: {{ ios_collection_label }}. Bộ lọc bên dưới chỉ đổi dữ liệu đang xem.</p>
   <div class="page-toolbar data-filter-toolbar">
-    <div class="feed-switcher" role="group" aria-label="Loại bảng xếp hạng iOS">
-      <a href="/data?country={{ country }}&feed_type=top-free"
+    <div class="platform-switcher" role="tablist" aria-label="Nền tảng">
+      <a href="/data?country={{ country }}&feed_type={{ feed_type }}&platform=ios"
+         class="platform-tab{% if platform != 'android' %} active{% endif %}">
+        🍎 Apple iOS
+      </a>
+      <a href="/data?country={{ country }}&feed_type={{ feed_type }}&platform=android"
+         class="platform-tab{% if platform == 'android' %} active{% endif %}">
+        🤖 Google Android
+      </a>
+    </div>
+    <div class="feed-switcher" role="group" aria-label="Loại bảng xếp hạng">
+      <a href="/data?country={{ country }}&feed_type=top-free&platform={{ platform or 'ios' }}"
          class="feed-option{% if feed_type == 'top-free' %} active{% endif %}"{% if feed_type == 'top-free' %} aria-current="page"{% endif %}>Top Free</a>
-      <a href="/data?country={{ country }}&feed_type=top-grossing"
+      <a href="/data?country={{ country }}&feed_type=top-grossing&platform={{ platform or 'ios' }}"
          class="feed-option{% if feed_type == 'top-grossing' %} active{% endif %}"{% if feed_type == 'top-grossing' %} aria-current="page"{% endif %}>Top Grossing</a>
     </div>
     <div class="control-field">
       <label for="country_select">Thị trường xem dữ liệu</label>
-      <select id="country_select" onchange="location.href='/?country=' + this.value + '&feed_type={{ feed_type }}';">
+      <select id="country_select" onchange="location.href='/data?country=' + this.value + '&feed_type={{ feed_type }}&platform={{ platform or 'ios' }}';">
         {% if legacy_market %}<option value="{{ legacy_market.country }}" selected>{{ legacy_market.name }} · dữ liệu cũ ngoài nhóm</option>{% endif %}
         {% for m in markets %}
           <option value="{{ m.country }}" {% if m.country == country or (current_market and m.country == current_market.country) %}selected{% endif %}>
@@ -52,7 +65,7 @@
     <div class="control-field">
       <label for="snapshot_select">Bản chụp đã lưu</label>
       {% if snapshots %}
-        <select id="snapshot_select" onchange="location.href='/?country={{ country }}&feed_type={{ feed_type }}&snapshot_id=' + this.value;">
+        <select id="snapshot_select" onchange="location.href='/data?country={{ country }}&feed_type={{ feed_type }}&platform={{ platform or 'ios' }}&snapshot_id=' + this.value;">
           {% for s in snapshots %}
             <option value="{{ s.id }}" {% if selected_snapshot and selected_snapshot.id == s.id %}selected{% endif %}>
               {{ s.observed_at_vn }} ({{ s.quality }})
@@ -93,28 +106,28 @@
       {% if selected_snapshot.raw_hash %}
         <span style="margin-left: 1rem;"><a href="/evidence/{{ selected_snapshot.raw_hash }}" style="color: var(--primary);">Tải raw evidence (JSON)</a></span>
       {% endif %}
-      <span style="margin-left: 1rem;"><a href="/export/csv?country={{ country }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}{% if selected_signal_filter %}&signal={{ selected_signal_filter }}{% endif %}" style="color: var(--primary);">📥 Tải CSV Phân Tích</a></span>
+      <span style="margin-left: 1rem;"><a href="/export/csv?country={{ country }}&platform={{ platform or 'ios' }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}{% if selected_signal_filter %}&signal={{ selected_signal_filter }}{% endif %}" style="color: var(--primary);">📥 Tải CSV Phân Tích</a></span>
     </div>
 
     <!-- Quick Filter Tabs -->
     <div class="filter-tabs">
-      <a href="/data?country={{ country }}&feed_type={{ feed_type }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}"
+      <a href="/data?country={{ country }}&feed_type={{ feed_type }}&platform={{ platform or 'ios' }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}"
          class="filter-tab {% if not selected_signal_filter %}active{% endif %}">
         Tất cả <span class="count-badge">{{ counts.all }}</span>
       </a>
-      <a href="/data?country={{ country }}&feed_type={{ feed_type }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=fast_risers"
+      <a href="/data?country={{ country }}&feed_type={{ feed_type }}&platform={{ platform or 'ios' }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=fast_risers"
          class="filter-tab filter-tab-fast-riser {% if selected_signal_filter in ('fast_risers', 'fast_riser', 'FAST_RISER') %}active{% endif %}">
         🚀 Tăng nhanh <span class="count-badge">{{ counts.fast_risers }}</span>
       </a>
-      <a href="/data?country={{ country }}&feed_type={{ feed_type }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=new_entries"
+      <a href="/data?country={{ country }}&feed_type={{ feed_type }}&platform={{ platform or 'ios' }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=new_entries"
          class="filter-tab filter-tab-new-entry {% if selected_signal_filter in ('new_entries', 'new_entry', 'NEW_ENTRY') %}active{% endif %}">
         ✨ Mới vào Top <span class="count-badge">{{ counts.new_entries }}</span>
       </a>
-      <a href="/data?country={{ country }}&feed_type={{ feed_type }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=falling"
+      <a href="/data?country={{ country }}&feed_type={{ feed_type }}&platform={{ platform or 'ios' }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=falling"
          class="filter-tab filter-tab-falling {% if selected_signal_filter in ('falling', 'FALLING') %}active{% endif %}">
         📉 Giảm hạng <span class="count-badge">{{ counts.falling }}</span>
       </a>
-      <a href="/data?country={{ country }}&feed_type={{ feed_type }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=steady"
+      <a href="/data?country={{ country }}&feed_type={{ feed_type }}&platform={{ platform or 'ios' }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}&signal=steady"
          class="filter-tab filter-tab-steady {% if selected_signal_filter in ('steady', 'STEADY') %}active{% endif %}">
         ⚖️ Ổn định <span class="count-badge">{{ counts.steady }}</span>
       </a>
@@ -131,6 +144,9 @@
           <tr>
             <th class="rank">#</th>
             <th>Game / Ứng dụng</th>
+            {% if platform == 'android' %}
+              <th>Lượt tải</th>
+            {% endif %}
             <th>Biến động & Xu hướng</th>
             <th>Cơ chế & Thể loại</th>
             <th>Mô hình Kiếm tiền</th>
@@ -149,7 +165,7 @@
                     <img src="{{ e.icon_url }}" alt="" class="app-icon" loading="lazy">
                   {% endif %}
                   <div>
-                    <a href="/games/{{ country }}/{{ e.app_id }}{% if selected_snapshot %}?snapshot_id={{ selected_snapshot.id }}{% endif %}" style="color: var(--text); font-weight: 600; text-decoration: none;">
+                    <a href="/games/{{ country }}/{{ e.app_id }}?platform={{ platform or 'ios' }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}" style="color: var(--text); font-weight: 600; text-decoration: none;">
                       {{ e.name }}
                     </a>
                     <div style="color: var(--text-muted); font-size: 0.75rem;">
@@ -158,6 +174,14 @@
                   </div>
                 </div>
               </td>
+              {% if platform == 'android' %}
+                <td>
+                  {{ render_installs_badge(e.min_installs) | safe }}
+                  {% if e.installs %}
+                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem;">{{ e.installs }}</div>
+                  {% endif %}
+                </td>
+              {% endif %}
               <td>
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                   <div>
@@ -230,11 +254,12 @@
               <td style="font-size: 0.875rem; color: var(--text-muted);">{{ e.rating_display }}</td>
               <td>
                 <div style="display: flex; gap: 0.35rem;">
-                  <a href="/games/{{ country }}/{{ e.app_id }}{% if selected_snapshot %}?snapshot_id={{ selected_snapshot.id }}{% endif %}" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                  <a href="/games/{{ country }}/{{ e.app_id }}?platform={{ platform or 'ios' }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
                     Chi tiết
                   </a>
-                  {% if e.store_url %}
-                    <a href="{{ e.store_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
+                  {% set s_url = app_store_url(e.store_url, e.app_id, platform or 'ios', country) %}
+                  {% if s_url %}
+                    <a href="{{ s_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
                       Store ↗
                     </a>
                   {% endif %}

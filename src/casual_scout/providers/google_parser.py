@@ -67,17 +67,43 @@ def parse_google_chart(body: bytes, chart: Chart) -> ParsedChart:
                     apps_container = inner[0][1][0][28][0]
                     seen: set[str] = set()
                     for idx, app_item in enumerate(apps_container):
-                        app_info = app_item[0]
-                        package = app_info[0][0]
+                        if not isinstance(app_item, list) or not app_item:
+                            continue
+                        app_info = (
+                            app_item[0]
+                            if isinstance(app_item[0], list) and app_item[0]
+                            else app_item
+                        )
+                        if not isinstance(app_info, list) or not app_info:
+                            continue
+
+                        package = None
+                        if isinstance(app_info[0], list) and app_info[0] and isinstance(app_info[0][0], str):
+                            package = app_info[0][0]
+                        elif isinstance(app_info[0], str):
+                            package = app_info[0]
+                        elif (
+                            len(app_info) > 1
+                            and isinstance(app_info[1], list)
+                            and app_info[1]
+                            and isinstance(app_info[1][0], str)
+                        ):
+                            package = app_info[1][0]
+
+                        if not package:
+                            continue
                         if package in seen:
                             continue
                         seen.add(package)
-                        name = app_info[3] if len(app_info) > 3 else package
-                        developer = app_info[14] if len(app_info) > 14 else None
+
+                        name = app_info[3] if len(app_info) > 3 and isinstance(app_info[3], str) else package
+                        developer = app_info[14] if len(app_info) > 14 and isinstance(app_info[14], str) else None
                         icon_url = (
                             app_info[1][3][2]
                             if len(app_info) > 1
+                            and isinstance(app_info[1], list)
                             and len(app_info[1]) > 3
+                            and isinstance(app_info[1][3], list)
                             and len(app_info[1][3]) > 2
                             else None
                         )

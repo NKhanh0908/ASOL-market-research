@@ -17,20 +17,25 @@
         {% endif %}
       </div>
       <div style="color: var(--text-muted); margin-top: 0.25rem;">
-        <span>Nhà phát triển: <strong>{{ metadata.developer or entry.developer or "—" }}</strong></span>
+        <span>Nền tảng: <strong>{% if platform == 'android' %}🤖 Google Android{% else %}🍎 Apple iOS{% endif %}</strong></span>
+        <span style="margin-left: 1rem;">Nhà phát triển: <strong>{{ metadata.developer or entry.developer or "—" }}</strong></span>
         <span style="margin-left: 1rem;">Thể loại: <strong>{{ analytics.subgenre or metadata.primary_genre or "Casual" }}</strong></span>
+        {% if metadata.min_installs or metadata.installs %}
+          <span style="margin-left: 1rem;">Lượt tải: {{ render_installs_badge(metadata.min_installs) | safe }} ({{ metadata.installs }})</span>
+        {% endif %}
         {% if metadata.average_rating is not none %}
           <span style="margin-left: 1rem;">Đánh giá: <strong>{{ metadata.average_rating }}★ ({{ metadata.rating_count }} lượt)</strong></span>
         {% endif %}
       </div>
 
       <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        {% if entry.store_url or metadata.store_url %}
-          <a href="{{ entry.store_url or metadata.store_url }}" target="_blank" rel="noopener noreferrer" class="btn">
-            Mở trên App Store ↗
+        {% set app_url = app_store_url(entry.store_url or metadata.store_url, app_id, platform or 'ios', country) %}
+        {% if app_url %}
+          <a href="{{ app_url }}" target="_blank" rel="noopener noreferrer" class="btn">
+            Mở trên {% if platform == 'android' %}Google Play{% else %}App Store{% endif %} ↗
           </a>
         {% endif %}
-        <a href="/data?country={{ country }}{% if snapshot_id %}&snapshot_id={{ snapshot_id }}{% endif %}" class="btn btn-secondary">
+        <a href="/data?country={{ country }}&platform={{ platform or 'ios' }}{% if snapshot_id %}&snapshot_id={{ snapshot_id }}{% endif %}" class="btn btn-secondary">
           ← Quay lại bảng xếp hạng
         </a>
       </div>
@@ -58,7 +63,7 @@
         {{ analytics.subgenre or "Casual" }}
       </div>
       <div style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.25rem;">
-        Nguồn Apple: {{ metadata.genres | join(', ') if metadata.genres else "Casual" }}
+        Nguồn {% if platform == 'android' %}Google Play{% else %}Apple{% endif %}: {{ metadata.genres | join(', ') if metadata.genres else "Casual" }}
       </div>
     </div>
 
@@ -119,6 +124,16 @@
         <span class="badge badge-efficiency">
           {{ analytics.monetization_efficiency_flag }}
         </span>
+      </div>
+    {% endif %}
+    {% if metadata.has_ads is defined and metadata.has_ads is not none %}
+      <div>
+        <span class="badge badge-subgenre">{% if metadata.has_ads %}Chứa quảng cáo (Ads){% else %}Không quảng cáo{% endif %}</span>
+      </div>
+    {% endif %}
+    {% if metadata.has_iap is defined and metadata.has_iap is not none %}
+      <div>
+        <span class="badge badge-subgenre">{% if metadata.has_iap %}Có In-App Purchase{% else %}Không có IAP{% endif %}</span>
       </div>
     {% endif %}
   </div>

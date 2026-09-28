@@ -27,6 +27,13 @@ from casual_scout.config import (
 )
 from casual_scout.storage import Repository
 from casual_scout.web.android import android_router
+from casual_scout.web.platform_api import create_platform_router
+from casual_scout.web.presentation import (
+    app_store_url,
+    installs_badge,
+    platform_url,
+    render_installs_badge,
+)
 from casual_scout.web.security import (
     LocalOriginMiddleware,
     SecurityManager,
@@ -97,7 +104,12 @@ def create_app(
     templates.env.globals["ios_collection_label"] = IOS_COLLECTION_LABEL
     templates.env.globals["ios_collection_count"] = len(IOS_COLLECTION_COUNTRIES)
     templates.env.globals["mock_demo"] = (settings.data_dir / "MOCK_DATA.json").is_file()
+    templates.env.globals["installs_badge"] = installs_badge
+    templates.env.globals["render_installs_badge"] = render_installs_badge
+    templates.env.globals["platform_url"] = platform_url
+    templates.env.globals["app_store_url"] = app_store_url
     app.include_router(android_router(android_store, templates, sec_mgr, android_launcher))
+    app.include_router(create_platform_router(repo, launcher))
 
     if static_dir.is_dir():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
@@ -133,6 +145,7 @@ def create_app(
         snapshot_id: str | None = None,
         signal: str | None = None,
         date: str | None = None,
+        platform: str = "ios",
     ):
         session_id, is_new = _get_or_create_session(request)
         csrf_token = sec_mgr.generate_csrf_token(session_id)
@@ -144,12 +157,14 @@ def create_app(
             snapshot_id=snapshot_id,
             signal=signal,
             date=date,
+            platform=platform,
         )
         context = {
             "request": request,
             "active_tab": "data",
             "csrf_token": csrf_token,
             "now_key": str(uuid4())[:8],
+            "platform": platform,
             **data,
         }
         rendered = templates.TemplateResponse(
@@ -164,6 +179,7 @@ def create_app(
         country: str = Form(default=IOS_COLLECTION_SCOPE),
         request_key: str = Form(default=""),
         csrf_token: str = Form(default=""),
+        platform: str = Form(default="ios"),
     ):
         session_id = request.cookies.get("session_id") or ""
         if not sec_mgr.validate_csrf_token(csrf_token, session_id):
@@ -179,7 +195,7 @@ def create_app(
         if not request_key:
             request_key = f"web-{uuid4()}"
 
-        run_id = jobs.submit("manual", countries, request_key)
+        run_id = jobs.submit("manual", countries, request_key, platform=platform)
 
         with closing(repo._connect()) as connection:
             android_run = connection.execute('SELECT id FROM android_jobs WHERE core_run_id=?', (run_id,)).fetchone()
@@ -340,16 +356,18 @@ def create_app(
         app_id: str,
         country: str = "vn",
         snapshot_id: str | None = None,
+        platform: str | None = None,
     ):
         session_id, is_new = _get_or_create_session(request)
 
-        game = get_game_view(repo, app_id, country=country, snapshot_id=snapshot_id)
+        game = get_game_view(repo, app_id, country=country, snapshot_id=snapshot_id, platform=platform)
         if game is None:
             raise HTTPException(status_code=404, detail="Game not found")
 
         context = {
             "request": request,
             "active_tab": "data",
+            "platform": platform or game.get("platform", "ios"),
             **game,
         }
         rendered = templates.TemplateResponse(request=request, name="game.html", context=context)
@@ -383,8 +401,9 @@ def create_app(
         snapshot_id: str | None = None,
         date: str | None = None,
         signal: str | None = None,
+        platform: str = "ios",
     ):
-        data = get_data_view(repo, country=country, snapshot_id=snapshot_id, signal=signal, date=date)
+        data = get_data_view(repo, country=country, snapshot_id=snapshot_id, signal=signal, date=date, platform=platform)
         entries = data.get("entries", [])
         if not entries:
             raise HTTPException(status_code=404, detail="No data available for download")
@@ -454,16 +473,18 @@ def create_app(
         request: Request,
         date: str | None = None,
         country: str = "all",
+        platform: str = "ios",
     ):
         session_id, is_new = _get_or_create_session(request)
         csrf_token = sec_mgr.generate_csrf_token(session_id)
         
-        data = get_dashboard_view(repo, date_str=date, country=country)
+        data = get_dashboard_view(repo, date_str=date, country=country, platform=platform)
         data["daily_schedule"] = repo.get_daily_schedule()
         context = {
             "request": request,
             "active_tab": "dashboard",
             "csrf_token": csrf_token,
+            "platform": platform,
             **data,
         }
         resp = templates.TemplateResponse(
@@ -497,13 +518,13 @@ def create_app(
     # ------------------ Phase 3 REST APIs & Export ------------------
 
     @app.get("/api/stats/summary")
-    def api_stats_summary(date: str | None = None, country: str = "all"):
-        data = get_dashboard_view(repo, date_str=date, country=country)
+    def api_stats_summary(date: str | None = None, country: str = "all", platform: str = "ios"):
+        data = get_dashboard_view(repo, date_str=date, country=country, platform=platform)
         return data["summary"]
 
     @app.get("/api/stats/monetization")
-    def api_stats_monetization(date: str | None = None, country: str = "all"):
-        data = get_dashboard_view(repo, date_str=date, country=country)
+    def api_stats_monetization(date: str | None = None, country: str = "all", platform: str = "ios"):
+        data = get_dashboard_view(repo, date_str=date, country=country, platform=platform)
         return {
             "date": data["selected_date"],
             "country": data["selected_country"],
@@ -512,18 +533,18 @@ def create_app(
         }
 
     @app.get("/api/stats/heatmap")
-    def api_stats_heatmap(date: str | None = None):
-        data = get_dashboard_view(repo, date_str=date, country="all")
+    def api_stats_heatmap(date: str | None = None, platform: str = "ios"):
+        data = get_dashboard_view(repo, date_str=date, country="all", platform=platform)
         return data["heatmap"]
 
     @app.get("/api/stats/trends")
-    def api_stats_trends(days: int = 7):
-        data = get_dashboard_view(repo, country="all")
+    def api_stats_trends(days: int = 7, platform: str = "ios"):
+        data = get_dashboard_view(repo, country="all", platform=platform)
         return data["trends"]
 
     @app.get("/api/stats/radar")
-    def api_stats_radar(date: str | None = None, country: str = "all", limit: int = 50):
-        data = get_dashboard_view(repo, date_str=date, country=country)
+    def api_stats_radar(date: str | None = None, country: str = "all", limit: int = 50, platform: str = "ios"):
+        data = get_dashboard_view(repo, date_str=date, country=country, platform=platform)
         return data["radar_items"][:limit]
 
     @app.get("/api/shortlist")
@@ -587,9 +608,9 @@ def create_app(
         )
 
     @app.get("/api/export/radar")
-    def api_export_radar(date: str | None = None, country: str = "all", format: str = "csv"):
+    def api_export_radar(date: str | None = None, country: str = "all", format: str = "csv", platform: str = "ios"):
         from casual_scout.stats.exporter import export_radar_to_csv, export_to_json
-        data = get_dashboard_view(repo, date_str=date, country=country)
+        data = get_dashboard_view(repo, date_str=date, country=country, platform=platform)
         radar_items = data["radar_items"]
         if format.lower() == "json":
             return Response(content=export_to_json(radar_items), media_type="application/json")
