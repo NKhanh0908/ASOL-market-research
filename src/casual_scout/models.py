@@ -14,6 +14,12 @@ class Chart:
     feed_type: str = "top-free"
 
     def __post_init__(self):
+        if self.platform == "android" and self.provider == "google":
+            if self.feed_type not in ("top-free", "top-grossing"):
+                raise ValueError("invalid Google chart identity")
+            object.__setattr__(self, "collection", self.feed_type)
+            return
+
         if self.feed_type in ("top-grossing", "topgrossingapplications") or self.collection in ("topgrossingapplications", "top-grossing"):
             object.__setattr__(self, "feed_type", "top-grossing")
             object.__setattr__(self, "collection", "topgrossingapplications")
