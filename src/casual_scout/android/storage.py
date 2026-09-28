@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from casual_scout.analysis.taxonomy import classify_app
+from casual_scout.analysis.taxonomy import classify_app, classify_google_play_subgenre
 
 VN = ZoneInfo("Asia/Ho_Chi_Minh")
 ACTIVE = ("pending", "queued", "running")
@@ -201,10 +201,23 @@ class AndroidStore:
                     raise ValueError("metadata package outside captured charts")
                 data = json.loads(row["data_json"])
                 data.update(result)
-                classified = classify_app(["Casual"], data["name"], data.get("description") or "")
+                category = str(data.get("application_category") or "").strip().upper()
+                data["casual_status"] = (
+                    "casual"
+                    if category in {"CASUAL", "GAME_CASUAL"}
+                    else "not_casual"
+                    if category.startswith("GAME_")
+                    else "unknown"
+                )
+                genres = data.get("google_play_genres") or []
+                data["subgenre"] = classify_google_play_subgenre(genres)
+                classified = classify_app(
+                    [data["subgenre"]] if data["subgenre"] else [],
+                    data["name"],
+                    data.get("description") or "",
+                )
                 data["mechanic"] = classified["mechanic"]
                 data["mechanic_confidence"] = classified["confidence"]
-                data["subgenre"] = classified["subgenre"]
                 data["analyzed_at"] = utcnow()
                 ads, iap = data.get("ads_observed"), data.get("iap_observed")
                 data["monetization_model"] = (
@@ -238,6 +251,8 @@ class AndroidStore:
             return None
         data = json.loads(rows[0][0])
         fetched_at = data.get("fetched_at")
+        if not data.get("application_category"):
+            return None
         if not fetched_at or datetime.now(UTC) - datetime.fromisoformat(fetched_at) > timedelta(
             hours=48
         ):
@@ -254,6 +269,8 @@ class AndroidStore:
             "iap_observed",
             "fetched_at",
             "metadata_evidence",
+            "application_category",
+            "google_play_genres",
         )
         return {**{key: data.get(key) for key in fields}, "metadata_status": "cached"}
 

@@ -60,13 +60,18 @@ def test_export_radar_csv_and_json():
         "delta_3d": 35,
         "signal": "FAST_RISER",
         "cross_market_count": 6,
-        "opportunity_score": 80.0,
-        "opportunity_badge": "HOT WAVE"
+        "noteworthy_label": "Đang tăng",
+        "noteworthy_reasons": ["VN: +25 hạng / 1 ngày"],
+        "presence_count": 1,
+        "observed_market_count": 2,
+        "presence_markets": ["vn"]
     }]
     csv_str = export_radar_to_csv(radar_items)
     assert csv_str.startswith('\ufeff')
     assert "Super Game" in csv_str
-    assert "HOT WAVE" in csv_str
+    assert "Đang tăng" in csv_str
+    assert "VN: +25 hạng / 1 ngày" in csv_str
+    assert "Opportunity Score" not in csv_str
     
     json_str = export_to_json(radar_items)
     assert "Super Game" in json_str

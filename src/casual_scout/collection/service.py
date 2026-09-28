@@ -26,7 +26,7 @@ class Collector:
         self.provider = provider
         self.jobs = jobs
 
-    def execute(self, run_id: str, enrich: bool = True) -> str:
+    def execute(self, run_id: str, enrich: bool = True, on_progress: Any = None) -> str:
         pid = os.getpid()
         try:
             created_at = psutil.Process(pid).create_time()
@@ -52,12 +52,17 @@ class Collector:
                     (run_id,),
                 ).fetchall()
 
-            for mr in market_runs:
+            total_mr = len(market_runs)
+            for idx, mr in enumerate(market_runs, 1):
                 self.jobs.heartbeat(run_id)
                 mr_id = str(mr["id"])
                 country = str(mr["country"])
+                collection = str(mr["collection"])
+                feed_label = "Top Grossing" if "grossing" in collection.lower() else "Top Free"
                 source_status = str(mr["source_status"])
                 source_note = mr["source_note"]
+                if on_progress:
+                    on_progress(f"[{idx}/{total_mr}] 📥 {country.upper()} — {feed_label}: Đang tải bảng xếp hạng...")
 
                 if source_status == "unverified":
                     now = _utc_text(datetime.now(UTC))
@@ -85,6 +90,8 @@ class Collector:
                 snapshot_id: str | None = None
                 if http_result.body is not None:
                     snapshot_id = self.repo.save_snapshot(run_id, http_result, parsed)
+                if on_progress:
+                    on_progress(f"    ✓ Nhận {len(parsed.entries)} game (chất lượng: {parsed.quality})")
 
                 if enrich and parsed.quality != "invalid" and snapshot_id is not None:
                     app_ids = [entry.app_id for entry in parsed.entries]
@@ -92,13 +99,16 @@ class Collector:
                     cached = self.repo.cached_metadata(country, app_ids, now_dt)
                     missing = [aid for aid in app_ids if aid not in cached]
 
-                    # Fetch in batches of up to 20
+                    if on_progress and missing:
+                        on_progress(f"    ⏳ Đang làm giàu metadata cho {len(missing)} game mới (đã cache: {len(cached)})...")
                     for i in range(0, len(missing), 20):
                         self.jobs.heartbeat(run_id)
                         chunk = missing[i : i + 20]
                         lookup_res, lookup_data = self.provider.fetch_metadata(country, chunk)
                         if lookup_res.body is not None and lookup_data:
                             self.repo.save_metadata(country, lookup_data, lookup_res)
+                    if on_progress and not missing:
+                        on_progress(f"    ✓ Đầy đủ metadata từ cache ({len(cached)} game)")
 
                     all_versions = self.repo.cached_metadata(country, app_ids, datetime.now(UTC))
                     if all_versions:

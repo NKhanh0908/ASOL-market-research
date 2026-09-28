@@ -16,7 +16,29 @@ from selenium.webdriver.support.ui import WebDriverWait
 URL = "https://play.google.com/store/apps/category/GAME_CASUAL?hl=vi&gl=VN"
 PACKAGE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$")
 BUTTONS = {"top-free": "ct|apps_topselling_free", "top-grossing": "ct|apps_topgrossing"}
+_PLAY_GENRE_CODE = re.compile(r"/store/apps/category/(GAME_[A-Z_]+)(?:/|$)")
 LOG = logging.getLogger(__name__)
+
+
+def extract_store_classification(application_data, genre_items):
+    category = application_data.get("applicationCategory")
+    if not isinstance(category, str):
+        category = None
+    genres = []
+    seen = set()
+    for item in genre_items:
+        label = " ".join(str(item.get("label") or "").split())
+        href = str(item.get("href") or "")
+        match = _PLAY_GENRE_CODE.search(urlparse(href).path)
+        code = match.group(1) if match else None
+        if not label and not code:
+            continue
+        key = (label.casefold(), code)
+        if key in seen:
+            continue
+        seen.add(key)
+        genres.append({"label": label or code, "code": code})
+    return {"application_category": category, "google_play_genres": genres}
 
 
 class GooglePlayBrowser:
@@ -169,9 +191,18 @@ class GooglePlayBrowser:
                 else {}
             )
             price = offer.get("price")
+            genre_items = self.driver.execute_script(
+                """
+                return Array.from(document.querySelectorAll('[itemprop="genre"]')).map(el => ({
+                  label: (el.innerText || '').trim(),
+                  href: el.querySelector('a[href*="/store/apps/category/"]')?.href || ''
+                }));
+                """
+            )
             return {
                 "package": package,
                 "metadata_status": "complete",
+                **extract_store_classification(data, genre_items),
                 "developer": author.get("name"),
                 "description": data.get("description"),
                 "rating": float(rating["ratingValue"])

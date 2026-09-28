@@ -15,6 +15,7 @@
   const statuses = {pending:'Đang chờ collector rảnh',queued:'Đang mở Chrome',running:'Đang thu thập',succeeded:'Hoàn tất',partial:'Hoàn tất một phần',failed:'Thu thập thất bại',interrupted:'Đã gián đoạn'};
   const metadataStates = {pending:'Đang chờ metadata',complete:'Đã phân tích',cached:'Đã phân tích · dùng cache',failed:'Metadata lỗi · giữ thứ hạng'};
   const fmt = value => value ? new Intl.DateTimeFormat('vi-VN',{dateStyle:'short',timeStyle:'medium',timeZone:'Asia/Ho_Chi_Minh'}).format(new Date(value)) : '—';
+  const casualLabels = {casual:'Casual',not_casual:'Không phải Casual',unknown:'Chưa xác định'};
   const node = (tag, text, cls) => { const el=document.createElement(tag); if(text!=null)el.textContent=text; if(cls)el.className=cls; return el; };
   const safeUrl = (value, image=false) => {
     try { const url=new URL(value); return url.protocol==='https:' && (image ? url.hostname.endsWith('.googleusercontent.com') : url.hostname==='play.google.com') ? url.href : null; } catch {return null;}
@@ -35,12 +36,14 @@
     if(icon){const img=node('img',null,'android-icon');img.src=icon;img.alt='';img.loading='lazy';top.append(img);}
     const title=node('div');title.append(node('h2',row.name),node('p',row.developer || 'Nhà phát triển: đang chờ dữ liệu','android-developer'));
     top.append(title);card.append(top,node('span',metadataStates[row.metadata_status] || row.metadata_status,'android-row-state '+row.metadata_status));
+    card.append(node('span',casualLabels[row.casual_status] || 'Chưa phân loại','android-category '+(row.casual_status || 'unknown')));
     const stats=node('div',null,'android-details');
     const delta=feed==='top-free'?row.delta_free_1d:row.delta_grossing_1d;
     const rating=row.rating==null?'Chưa có dữ liệu':`${Number(row.rating).toFixed(1)} ★ · ${Number(row.rating_count||0).toLocaleString('vi-VN')} đánh giá`;
     for(const [label,value] of [
       ['Đánh giá',rating],['Biến động 1 ngày',delta==null?'Chưa có mốc so sánh':`${delta>0?'+':''}${delta} hạng`],
       ['Top Free / Grossing',`${row.free_rank?'#'+row.free_rank:'—'} / ${row.grossing_rank?'#'+row.grossing_rank:'—'}`],
+      ['Thể loại con',row.subgenre || row.google_play_genres?.map(g=>g.label).filter(Boolean).join(', ') || 'Chưa có dữ liệu'],
       ['Cơ chế (suy luận)',row.mechanic?`${row.mechanic} · ${row.mechanic_confidence}`:'Đang chờ phân tích'],
       ['Kiếm tiền (tín hiệu)',row.monetization_model || 'UNKNOWN'],['Metadata cập nhật',fmt(row.fetched_at)]
     ]){const field=node('div');field.append(node('span',label),node('strong',value));stats.append(field);}
@@ -55,7 +58,9 @@
   function renderRows() {
     if(!latest)return;
     const rank=feed==='top-free'?'free_rank':'grossing_rank';
-    const rows=latest.entries.filter(r=>r[rank]!=null).sort((a,b)=>a[rank]-b[rank]);
+    const chartRows=latest.entries.filter(r=>r[rank]!=null);
+    const excluded=chartRows.filter(r=>r.casual_status==='not_casual').length;
+    const rows=chartRows.filter(r=>r.casual_status!=='not_casual').sort((a,b)=>a[rank]-b[rank]);
     const container=$('android-results');
     const wanted=new Set(rows.map(r=>r.package));
     for(const [key,entry] of cards){if(!wanted.has(key)){entry.element.remove();cards.delete(key);}}
@@ -71,9 +76,10 @@
       if(container.children[index]!==previous.element)container.insertBefore(previous.element,container.children[index]||null);
     }
     $('android-empty').hidden=rows.length>0;
-    $('android-empty').textContent=latest.job?'Bảng này chưa có kết quả trong lần thu thập đã chọn.':'Bấm “Crawl Android ngay” để bắt đầu.';
+    $('android-empty').textContent=latest.job?(excluded?'Không còn game Casual trong bảng này sau khi lọc.':'Bảng này chưa có kết quả trong lần thu thập đã chọn.'):'Bấm “Crawl Android ngay” để bắt đầu.';
     const chart=latest.charts.find(c=>c.feed===feed);
-    $('android-chart-note').textContent=`${chart?chart.count+' game · Quan sát '+fmt(chart.observed_at):'Đang chờ bảng xếp hạng'}. Top Grossing là thứ hạng, không phải số tiền doanh thu.`;
+    const unknown=chartRows.filter(r=>r.casual_status==='unknown' || !r.casual_status).length;
+    $('android-chart-note').textContent=`${chart?`${rows.filter(r=>r.casual_status==='casual').length} Casual / ${chart.count} hạng · loại ${excluded} game khác thể loại · chưa rõ ${unknown} · quan sát ${fmt(chart.observed_at)}`:'Đang chờ bảng xếp hạng'}. Chỉ game xác nhận Casual được tính vào danh sách; Top Grossing là thứ hạng, không phải doanh thu.`;
   }
   function render(data) {
     latest=data;

@@ -1,42 +1,41 @@
 from __future__ import annotations
 
+from contextlib import closing
 from pathlib import Path
 
 from casual_scout import cli
 
 
-def test_pipeline_analyzes_vietnam_after_a_partial_collection(
-    tmp_path: Path, monkeypatch
+def test_pipeline_analyzes_all_successful_markets_after_a_partial_collection(
+    collection_fixture, monkeypatch
 ) -> None:
-    calls: list[object] = []
+    from dataclasses import replace
+    from datetime import UTC, datetime
 
-    class FakeCollector:
-        def __init__(self, *args: object) -> None:
-            pass
+    repo, provider, jobs, _collector = collection_fixture
+    countries = ['vn', 'th', 'id', 'my', 'ph', 'sg', 'la', 'kh', 'us']
+    fetch = provider.fetch_chart
 
-        def execute(self, run_id: str, *, enrich: bool = True) -> str:
-            calls.append(("collect", run_id, enrich))
-            return "partial"
+    def fetch_on_historical_days(chart):
+        provider.fail_chart = chart.country == 'kh'
+        reply, parsed = fetch(chart)
+        # A run can span UTC midnight: analyze each actual observed day, not now().
+        day = 24 if chart.country == 'us' else 25
+        return replace(reply, started_at=datetime(2026, 9, day, 23, 59, tzinfo=UTC)), parsed
 
-    class FakeAnalysisService:
-        def __init__(self, repository: object) -> None:
-            calls.append(("analysis_service", repository))
-
-        def analyze_date(self, date: str, countries: list[str]) -> dict[str, object]:
-            calls.append(("analyze", date, countries))
-            return {"markets": countries}
-
-    monkeypatch.setattr(cli, "Collector", FakeCollector)
-    monkeypatch.setattr(cli, "AnalysisService", FakeAnalysisService)
-
-    exit_code = cli.main(
-        ["pipeline", "--run-id", "run-123", "--data-dir", str(tmp_path / "data")]
-    )
-
-    assert exit_code == 0
-    assert calls[0] == ("collect", "run-123", True)
-    assert calls[-1][0] == "analyze"
-    assert calls[-1][2] == ["vn"]
+    monkeypatch.setattr(provider, 'fetch_chart', fetch_on_historical_days)
+    monkeypatch.setattr(cli, 'AppleProvider', lambda _settings: provider)
+    run_id = jobs.submit('manual', countries, 'pipeline-nine')
+    assert cli.main(['pipeline', '--run-id', run_id, '--data-dir', str(repo.data_dir),
+                     '--no-enrich']) == 0
+    assert set(provider.requested_countries) == set(countries)
+    with closing(repo._connect()) as db:
+        rows = db.execute('SELECT DISTINCT date,country FROM daily_rank_analytics').fetchall()
+        assert {(r['date'], r['country']) for r in rows} == {
+            ('2026-09-24' if c == 'us' else '2026-09-25', c)
+            for c in countries if c != 'kh'
+        }
+        assert db.execute('SELECT status FROM runs WHERE id=?', (run_id,)).fetchone()[0] == 'partial'
 
 
 def test_pipeline_does_not_analyze_when_collection_fails(tmp_path: Path, monkeypatch) -> None:

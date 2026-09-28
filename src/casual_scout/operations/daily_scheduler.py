@@ -14,7 +14,7 @@ _CHECK_INTERVAL_SECONDS = 30.0
 
 
 class DailyScheduler:
-    """Small in-process scheduler for the fixed daily Vietnam collection."""
+    """In-process scheduler for the shared iOS market group, on Vietnam time."""
 
     def __init__(
         self,

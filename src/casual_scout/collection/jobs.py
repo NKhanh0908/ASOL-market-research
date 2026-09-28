@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import psutil
 
+from casual_scout.config import IOS_COLLECTION_COUNTRIES
 from casual_scout.models import Chart
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ class JobService:
             if kind == 'daily':
                 claimed = conn.execute('''UPDATE daily_schedule SET last_triggered_local_date=?,updated_at=?
                     WHERE id=1 AND enabled=1 AND (last_triggered_local_date IS NULL OR last_triggered_local_date<>?)''', (value, stamp, value))
-                request_key = f'daily-vn-{value}'
+                request_key = f'daily-ios-{value}'
             elif kind == 'one-time':
                 row = conn.execute("SELECT * FROM one_time_collection_schedule WHERE id=1 AND status='pending'").fetchone()
                 if not row or row['scheduled_for_utc'] != value:
@@ -65,10 +66,11 @@ class JobService:
             run_id = str(uuid4())
             conn.execute('''INSERT INTO runs(id,request_key,"trigger",status,started_at,summary_json)
                 VALUES(?,?,?,'queued',?,'{}')''', (run_id, request_key, 'daily' if kind == 'daily' else 'manual', stamp))
-            chart = Chart('vn', feed_type='top-free')
-            endpoint = f'https://itunes.apple.com/vn/rss/{chart.collection}/limit={chart.depth}/genre={chart.genre}/json'
-            chart_id = self.repo._ensure_chart(conn, chart, endpoint)
-            self.repo._ensure_market_run(conn, run_id, chart_id, now)
+            for country in IOS_COLLECTION_COUNTRIES:
+                chart = Chart(country, feed_type='top-free')
+                endpoint = f'https://itunes.apple.com/{country}/rss/{chart.collection}/limit={chart.depth}/genre={chart.genre}/json'
+                chart_id = self.repo._ensure_chart(conn, chart, endpoint)
+                self.repo._ensure_market_run(conn, run_id, chart_id, now)
             if kind == 'one-time':
                 conn.execute('UPDATE one_time_collection_schedule SET run_id=? WHERE id=1', (run_id,))
             return run_id

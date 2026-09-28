@@ -13,7 +13,9 @@ def test_daily_schedule_is_initialized_and_can_be_enabled(tmp_path) -> None:
         "enabled": False,
         "time": "07:00",
         "timezone": "Asia/Ho_Chi_Minh",
-        "country": "vn",
+        "country": None,
+        "scope": "nearby-us",
+        "countries": ["vn", "th", "id", "my", "ph", "sg", "la", "kh", "us"],
         "chart_type": "top-free",
         "last_triggered_local_date": None,
     }

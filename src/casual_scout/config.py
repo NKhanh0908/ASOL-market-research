@@ -1,6 +1,11 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+# Shared iOS button/schedule scope; data-view filters and Android stay independent.
+IOS_COLLECTION_COUNTRIES = ('vn', 'th', 'id', 'my', 'ph', 'sg', 'la', 'kh', 'us')
+IOS_COLLECTION_SCOPE = 'nearby-us'
+IOS_COLLECTION_LABEL = 'Việt Nam, Thái Lan, Indonesia, Malaysia, Philippines, Singapore, Lào, Campuchia, Mỹ'
+
 
 @dataclass(frozen=True, slots=True)
 class Settings:

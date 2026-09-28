@@ -26,12 +26,22 @@ def test_android_web_csrf_and_batch_api_while_run_active(tmp_path):
     )
     store.save_batch(
         job_id,
-        [{"package": "com.example.one", "developer": "Studio", "metadata_status": "complete"}],
+        [
+            {
+                "package": "com.example.one",
+                "developer": "Studio",
+                "metadata_status": "complete",
+                "application_category": "GAME_CASUAL",
+                "google_play_genres": [{"label": "Giải đố", "code": "GAME_PUZZLE"}],
+            }
+        ],
     )
     response = client.get("/api/android/data", params={"job_id": job_id})
     assert response.status_code == 200
     assert response.json()["job"]["processed"] == 1
     assert response.json()["entries"][0]["developer"] == "Studio"
+    assert response.json()["entries"][0]["casual_status"] == "casual"
+    assert response.json()["entries"][0]["subgenre"] == "Puzzle"
     assert response.json()["job"]["status"] == "queued"
     assert client.get("/api/android/data?job_id=missing").status_code == 404
     assert (
@@ -44,6 +54,18 @@ def test_android_web_csrf_and_batch_api_while_run_active(tmp_path):
         ]
         is True
     )
+
+
+def test_android_page_exposes_progressive_results_and_announced_batch_count(tmp_path):
+    app = create_app(Settings(tmp_path), android_launcher=lambda *_: None)
+    response = TestClient(app).get("/android")
+
+    assert response.status_code == 200
+    assert 'id="android-crawl"' in response.text
+    assert 'id="android-progress"' in response.text
+    assert 'id="android-count" role="status"' in response.text
+    assert 'id="android-results" class="android-grid" role="region"' in response.text
+    assert response.text.index('id="android-results"') < response.text.index('id="android-empty"')
 
 
 def test_android_does_not_replace_ios_one_time_scheduler(tmp_path):

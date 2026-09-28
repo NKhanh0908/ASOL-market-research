@@ -4,6 +4,7 @@ import secrets
 from collections.abc import Callable
 from contextlib import asynccontextmanager, closing
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -18,7 +19,12 @@ from casual_scout.android.coordinator import AndroidCoordinator, launch_android
 from casual_scout.android.storage import AndroidStore
 from casual_scout.collection.jobs import JobService
 from casual_scout.collection.processes import launch_pipeline
-from casual_scout.config import Settings
+from casual_scout.config import (
+    IOS_COLLECTION_COUNTRIES,
+    IOS_COLLECTION_LABEL,
+    IOS_COLLECTION_SCOPE,
+    Settings,
+)
 from casual_scout.storage import Repository
 from casual_scout.web.android import android_router
 from casual_scout.web.security import (
@@ -76,13 +82,23 @@ def create_app(
     )
     app.add_middleware(LocalOriginMiddleware, hosts=allowed_hosts())
 
+    static_dir = Path(__file__).parent / "static"
+
+    def static_asset(filename: str) -> str:
+        # Match each rendered page to its CSS/JS, even after an in-place update.
+        version = sha256((static_dir / filename).read_bytes()).hexdigest()[:12]
+        return f"/static/{filename}?v={version}"
+
     templates_dir = Path(__file__).parent / "templates"
     templates = Jinja2Templates(directory=str(templates_dir))
     templates.env.autoescape = True
+    templates.env.globals["static_asset"] = static_asset
+    templates.env.globals["ios_collection_scope"] = IOS_COLLECTION_SCOPE
+    templates.env.globals["ios_collection_label"] = IOS_COLLECTION_LABEL
+    templates.env.globals["ios_collection_count"] = len(IOS_COLLECTION_COUNTRIES)
     templates.env.globals["mock_demo"] = (settings.data_dir / "MOCK_DATA.json").is_file()
     app.include_router(android_router(android_store, templates, sec_mgr, android_launcher))
 
-    static_dir = Path(__file__).parent / "static"
     if static_dir.is_dir():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
@@ -145,7 +161,7 @@ def create_app(
     @app.post("/runs")
     def post_runs(
         request: Request,
-        country: str = Form(default="vn"),
+        country: str = Form(default=IOS_COLLECTION_SCOPE),
         request_key: str = Form(default=""),
         csrf_token: str = Form(default=""),
     ):
@@ -153,7 +169,9 @@ def create_app(
         if not sec_mgr.validate_csrf_token(csrf_token, session_id):
             raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
-        if country == "all":
+        if country == IOS_COLLECTION_SCOPE:
+            countries = list(IOS_COLLECTION_COUNTRIES)
+        elif country == "all":
             countries = _ALL_MARKETS
         else:
             countries = [c.strip().lower() for c in country.split(",") if c.strip()]
@@ -389,6 +407,7 @@ def create_app(
             "signal",
             "cross_market_count",
             "cross_markets",
+            "observed_market_count",
             "developer",
             "rating",
             "store_url",
@@ -412,6 +431,7 @@ def create_app(
                     e.get("signal"),
                     e.get("cross_market_count"),
                     cm_str,
+                    e.get("observed_market_count"),
                     e.get("developer"),
                     e.get("rating_display"),
                     e.get("store_url"),

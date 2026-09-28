@@ -17,7 +17,6 @@ DEST = SOURCE / "demo-mock-2026-09-23"
 SNAPSHOT = "mock-vn-2026-09-23"
 STAMP = "2026-09-23T00:00:00Z"
 
-c
 def build():
     DEST.mkdir(exist_ok=False)
     with sqlite3.connect((SOURCE / "casual-scout.sqlite3").as_uri() + "?mode=ro", uri=True) as source:

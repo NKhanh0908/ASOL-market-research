@@ -22,6 +22,40 @@ _KNOWN_SUBGENRES = [
     'Family',
 ]
 
+_GOOGLE_PLAY_SUBGENRES = {
+    "GAME_PUZZLE": "Puzzle",
+    "GAME_SIMULATION": "Simulation",
+    "GAME_ARCADE": "Arcade",
+    "GAME_ACTION": "Action",
+    "GAME_CARD": "Card",
+    "GAME_BOARD": "Board",
+    "GAME_SPORTS": "Sports",
+    "GAME_STRATEGY": "Strategy",
+    "GAME_TRIVIA": "Trivia",
+    "GAME_WORD": "Word",
+    "GAME_ROLE_PLAYING": "Role Playing",
+    "GAME_ADVENTURE": "Adventure",
+    "GAME_RACING": "Racing",
+    "GAME_MUSIC": "Music",
+    "GAME_CASUAL": "Casual",
+    "GAME_CASINO": "Casino",
+    "GAME_FAMILY": "Family",
+}
+
+
+def classify_google_play_subgenre(genres: list[dict[str, Any]]) -> str | None:
+    for genre in genres:
+        code = genre.get("code")
+        if code in _GOOGLE_PLAY_SUBGENRES:
+            return _GOOGLE_PLAY_SUBGENRES[code]
+        label = str(genre.get("label") or "").strip()
+        if label:
+            inferred = classify_subgenre([label])
+            if inferred != "Casual" or label.casefold() == "casual":
+                return inferred
+            return label
+    return None
+
 _MECHANIC_KEYWORDS: dict[str, list[str]] = {
     'Match-3': [
         'match 3',

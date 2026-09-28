@@ -3,11 +3,11 @@
 {% block title %}Chi tiết lần thu thập {{ run.id[:8] }}{% endblock %}
 
 {% block content %}
-<div class="card">
-  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+<div class="card run-summary">
+  <div class="page-title-row">
     <div>
-      <h2 style="font-size: 1.25rem; font-weight: 700;">Chi tiết lần thu thập</h2>
-      <div style="font-family: monospace; font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">
+      <h1 class="page-heading">Chi tiết lượt thu thập</h1>
+      <div class="run-id">
         ID: {{ run.id }}
       </div>
     </div>
@@ -19,15 +19,15 @@
     </div>
   </div>
 
-  <div style="margin-top: 1rem; display: flex; gap: 2rem; flex-wrap: wrap; font-size: 0.875rem; color: var(--text-muted);">
+  <div class="run-metadata">
     <div>Trigger: <strong style="color: var(--text);">{{ run.trigger }}</strong></div>
     <div>Bắt đầu: <strong style="color: var(--text);">{{ run.started_at_vn }}</strong></div>
     <div>Kết thúc: <strong style="color: var(--text);" id="run-ended-at">{{ run.ended_at_vn or "Đang tiến hành..." }}</strong></div>
   </div>
 </div>
 
-<div class="card" style="padding: 0; overflow: hidden;">
-  <div class="card-title" style="padding: 1.25rem 1.25rem 0.5rem 1.25rem;">Tiến độ theo thị trường</div>
+<div class="card data-table-card">
+  <h2 class="card-title run-table-title">Tiến độ theo thị trường</h2>
   <div class="table-responsive">
     <table>
       <thead>

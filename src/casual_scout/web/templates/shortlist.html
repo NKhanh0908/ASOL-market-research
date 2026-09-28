@@ -3,30 +3,30 @@
 {% block title %}Opportunity Shortlist{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 2rem; gap: 1rem;">
+<div class="page-toolbar page-title-row">
   <div>
-    <h1 style="font-size: 1.75rem; font-weight: 700; margin: 0;">⭐ Opportunity Shortlist</h1>
-    <p style="color: var(--text-muted); margin: 0.25rem 0 0 0;">Danh sách ứng viên tiềm năng đã lưu để studio nghiên cứu & phát triển</p>
+    <h1 class="page-heading">Shortlist</h1>
+    <p class="page-lede">Danh sách game tiềm năng đã lưu để studio nghiên cứu và phát triển.</p>
   </div>
   
-  <div style="display: flex; gap: 0.5rem;">
-    <a href="/api/export/shortlist?format=csv" style="padding: 0.4rem 0.8rem; background: #2563eb; color: white; border-radius: 6px; font-size: 0.85rem; text-decoration: none;">⬇️ Xuất CSV (Excel)</a>
-    <a href="/api/export/shortlist?format=json" target="_blank" style="padding: 0.4rem 0.8rem; background: #334155; color: white; border-radius: 6px; font-size: 0.85rem; text-decoration: none;">⬇️ Xuất JSON</a>
+  <div class="page-toolbar">
+    <a href="/api/export/shortlist?format=csv" class="btn">Xuất CSV</a>
+    <a href="/api/export/shortlist?format=json" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Xuất JSON</a>
   </div>
 </div>
 
 <!-- Shortlist Table -->
-<div style="background: var(--card-bg, #1e293b); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border-color, #334155);">
+<div class="card shortlist-card">
   {% if items|length == 0 %}
-    <div style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
-      <p style="font-size: 1.2rem;">Chưa có game nào trong Shortlist</p>
-      <p style="font-size: 0.85rem;">Hãy truy cập <a href="/dashboard" style="color: #38bdf8;">📊 Dashboard</a> hoặc <a href="/data" style="color: #38bdf8;">🗂️ Dữ liệu thị trường</a> để lưu các game tiềm năng!</p>
+    <div class="empty-state">
+      <p>Chưa có game nào trong Shortlist</p>
+      <p>Truy cập <a href="/dashboard">Tổng quan</a> hoặc <a href="/data">iOS</a> để lưu game tiềm năng.</p>
     </div>
   {% else %}
-    <div style="overflow-x: auto;">
+    <div class="table-responsive">
       <table style="width: 100%; border-collapse: collapse; font-size: 0.875rem;">
         <thead>
-          <tr style="border-bottom: 2px solid var(--border-color, #334155); text-align: left;">
+          <tr class="table-rule-strong">
             <th style="padding: 0.75rem;">Game</th>
             <th style="padding: 0.75rem;">Thể loại / Cơ chế</th>
             <th style="padding: 0.75rem;">Rank lúc lưu</th>
@@ -38,8 +38,8 @@
         </thead>
         <tbody>
           {% for it in items %}
-          <tr style="border-bottom: 1px solid var(--border-color, #334155);" id="row-{{ it.app_id }}">
-            <td style="padding: 0.75rem;">
+          <tr id="row-{{ it.app_id }}">
+            <td>
               <div style="font-weight: 600;">
                 <a href="/games/{{ it.primary_country }}/{{ it.app_id }}" style="color: inherit; text-decoration: none;">{{ it.title }}</a>
               </div>
@@ -47,19 +47,16 @@
             </td>
 
             <td style="padding: 0.75rem;">
-              <span style="padding: 0.2rem 0.5rem; background: #1e293b; border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.75rem;">{{ it.subgenre or 'Casual' }}</span>
-              <div style="margin-top: 0.25rem; font-size: 0.75rem; color: #38bdf8;">{{ it.mechanic or 'General' }}</div>
+              <span class="badge badge-subgenre">{{ it.subgenre or 'Casual' }}</span>
+              <div class="table-callout table-callout-accent">{{ it.mechanic or 'General' }}</div>
             </td>
 
             <td style="padding: 0.75rem;">
               <div>#{{ it.rank_at_bookmark }}</div>
-              {% if it.opportunity_score %}
-                <div style="font-size: 0.75rem; color: #f59e0b;">Score: {{ it.opportunity_score }}</div>
-              {% endif %}
             </td>
 
             <td style="padding: 0.75rem;">
-              <select onchange="updateItem('{{ it.app_id }}', { priority: this.value })" style="padding: 0.25rem 0.5rem; border-radius: 4px; background: #0f172a; border: 1px solid #334155; color: inherit; font-size: 0.8rem;">
+              <select aria-label="Độ ưu tiên {{ it.title }}" onchange="updateItem('{{ it.app_id }}', { priority: this.value })">
                 <option value="HIGH" {% if it.priority == 'HIGH' %}selected{% endif %}>🔥 HIGH</option>
                 <option value="MEDIUM" {% if it.priority == 'MEDIUM' %}selected{% endif %}>⚡ MEDIUM</option>
                 <option value="LOW" {% if it.priority == 'LOW' %}selected{% endif %}>LOW</option>
@@ -67,7 +64,7 @@
             </td>
 
             <td style="padding: 0.75rem;">
-              <select onchange="updateItem('{{ it.app_id }}', { status: this.value })" style="padding: 0.25rem 0.5rem; border-radius: 4px; background: #0f172a; border: 1px solid #334155; color: inherit; font-size: 0.8rem;">
+              <select aria-label="Trạng thái {{ it.title }}" onchange="updateItem('{{ it.app_id }}', { status: this.value })">
                 <option value="CONSIDERING" {% if it.status == 'CONSIDERING' %}selected{% endif %}>🤔 Considering</option>
                 <option value="PROTOTYPE" {% if it.status == 'PROTOTYPE' %}selected{% endif %}>🚀 Prototype</option>
                 <option value="PASSED" {% if it.status == 'PASSED' %}selected{% endif %}>⏸️ Passed</option>
@@ -76,11 +73,11 @@
             </td>
 
             <td style="padding: 0.75rem; max-width: 250px;">
-              <input type="text" value="{{ it.notes or '' }}" onblur="updateItem('{{ it.app_id }}', { notes: this.value })" placeholder="Thêm ghi chú..." style="width: 100%; padding: 0.25rem 0.5rem; background: #0f172a; border: 1px solid #334155; color: inherit; border-radius: 4px; font-size: 0.8rem;">
+              <input type="text" aria-label="Ghi chú {{ it.title }}" value="{{ it.notes or '' }}" onblur="updateItem('{{ it.app_id }}', { notes: this.value })" placeholder="Thêm ghi chú...">
             </td>
 
             <td style="padding: 0.75rem; text-align: right;">
-              <button onclick="deleteItem('{{ it.app_id }}')" style="padding: 0.3rem 0.6rem; background: #ef4444; color: white; border: none; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
+              <button class="btn btn-danger" aria-label="Xóa {{ it.title }} khỏi Shortlist" onclick="deleteItem('{{ it.app_id }}')">
                 Xóa
               </button>
             </td>

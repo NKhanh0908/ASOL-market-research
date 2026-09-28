@@ -88,7 +88,7 @@ casual_scout serve --host 127.0.0.1 --port 8000 --data-dir .\data
 ```
 Truy cập [http://127.0.0.1:8000](http://127.0.0.1:8000) trên trình duyệt.
 
-Trên `/dashboard`, dùng **Crawl ngay** để thu thập Top Free iOS Việt Nam và tự phân tích sau khi crawl xong. Lịch 07:00 `Asia/Ho_Chi_Minh` tắt mặc định; bật bằng công tắc trên Dashboard. Lịch chỉ chạy khi lệnh `serve` và máy vẫn đang hoạt động, không chạy bù khi server tắt.
+Trên `/dashboard` và `/data`, **Crawl ngay** thu thập Top Free Casual iOS của **9 thị trường**: Việt Nam, Thái Lan, Indonesia, Malaysia, Philippines, Singapore, Lào, Campuchia và Mỹ. Nút crawl, lịch hằng ngày và lịch một lần trên `/data` dùng cùng nhóm này, không phụ thuộc bộ lọc xem dữ liệu. Sau crawl, hệ thống phân tích các thị trường có bản chụp hoàn chỉnh theo đúng ngày quan sát UTC; lỗi nguồn ở một nước vẫn được ghi rõ trong lượt chạy. Lịch 07:00 `Asia/Ho_Chi_Minh` tắt mặc định; bật bằng công tắc trên Dashboard. Lịch chỉ chạy khi lệnh `serve` và máy vẫn đang hoạt động, không chạy bù khi server tắt. Lịch đã bật/đặt trước sẽ dùng nhóm mới sau khi khởi động lại web; không tự bật lịch đang tắt. Android giữ nguyên phạm vi VN riêng.
 
 ---
 
@@ -368,6 +368,30 @@ $env:CASUAL_SCOUT_LAN_HOSTS = '192.168.1.4'
 ```
 
 Đánh giá triển khai: [Android live batches](docs/operations/2026-09-24-android-live-batches-acceptance.md).
+
+## Gemini Free Tier pilot (manual AI evaluation)
+
+Set these server-side values in the ignored local `.env` or process environment. Process
+environment values take precedence. Keep the real API key out of source control and logs.
+
+```dotenv
+GEMINI_API_KEY=replace-with-your-own-key
+CASUAL_SCOUT_AI_ENABLED=true
+CASUAL_SCOUT_AI_COST_MODE=free_tier
+CASUAL_SCOUT_AI_FREE_TIER_CONFIRMED=true
+CASUAL_SCOUT_AI_CONFIRM_UNKNOWN_COST=true
+CASUAL_SCOUT_AI_MAX_OUTPUT_TOKENS=2000
+CASUAL_SCOUT_AI_MAX_RUNS_PER_DAY=5
+CASUAL_SCOUT_AI_TIMEOUT_SECONDS=60
+```
+
+The pilot uses `gemini-2.5-flash` and requires manual confirmation for each evaluation.
+It reserves at most five attempted calls per Asia/Ho_Chi_Minh calendar day in SQLite;
+failed and queued attempts count, and a server restart does not reset the limit. It sends
+selected public store evidence to the Gemini Developer API. It does not send private
+shortlist notes or local files. The application cannot verify your account's billing tier
+or guarantee zero charges. Token usage is not an invoice, so actual cost remains unknown.
+AI recommendations are a pilot result requiring human quality review before decisions.
 
 ## 📄 Bản Quyền
 Phát triển cho mục đích Nghiên cứu & Phân tích Thị trường Casual Games — ASOL. Giấy phép MIT.

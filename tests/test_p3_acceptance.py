@@ -55,8 +55,8 @@ def test_p3_end_to_end_flow(tmp_path: Path):
     assert radar_resp.status_code == 200
     radar_data = radar_resp.json()
     assert len(radar_data) == 20
-    assert radar_data[0]["opportunity_score"] >= 75.0
-    assert radar_data[0]["opportunity_badge"] == "HOT WAVE"
+    assert "opportunity_score" not in radar_data[0]
+    assert radar_data[0]["noteworthy_label"] == "Chưa đủ dữ liệu so sánh"
     
     # 3. Bookmark top game to Shortlist via API
     top_game = radar_data[0]
@@ -66,7 +66,6 @@ def test_p3_end_to_end_flow(tmp_path: Path):
         "title": "Top Trending Game",
         "primary_country": "vn",
         "rank_at_bookmark": top_game["current_rank"],
-        "opportunity_score": top_game["opportunity_score"],
         "notes": "Verified top opportunity candidate"
     })
     assert bm_resp.status_code == 200

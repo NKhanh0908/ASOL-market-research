@@ -3,15 +3,15 @@
 {% block title %}{{ metadata.name or entry.name or "Chi tiết Game" }}{% endblock %}
 
 {% block content %}
-<div class="card">
-  <div style="display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap;">
+<div class="card game-hero">
+  <div class="game-hero-layout">
     {% if entry.icon_url %}
-      <img src="{{ entry.icon_url }}" alt="" style="width: 80px; height: 80px; border-radius: 16px; border: 1px solid var(--surface-border);">
+      <img src="{{ entry.icon_url }}" alt="" class="game-icon">
     {% endif %}
 
-    <div style="flex: 1;">
-      <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
-        <h2 style="font-size: 1.5rem; font-weight: 700;">{{ metadata.name or entry.name }}</h2>
+    <div class="game-hero-copy">
+      <div class="game-title-row">
+        <h1 class="page-heading">{{ metadata.name or entry.name }}</h1>
         {% if analytics.signal %}
           <span class="badge badge-{{ analytics.signal }}">{{ analytics.signal }}</span>
         {% endif %}
@@ -40,11 +40,11 @@
 
 <!-- Classification Evidence Box -->
 <div class="card">
-  <div class="card-title">🔍 Bằng chứng phân loại (Classification Evidence)</div>
-  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; font-size: 0.9rem;">
-    <div style="background: rgba(0,0,0,0.2); padding: 0.75rem; border-radius: 0.375rem; border: 1px solid var(--surface-border);">
+  <h2 class="card-title">Bằng chứng phân loại</h2>
+  <div class="classification-grid">
+    <div>
       <div style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">Cơ chế chính (Mechanic)</div>
-      <div style="font-size: 1.1rem; font-weight: 700; color: #60a5fa; margin-top: 0.25rem;">
+      <div class="table-callout table-callout-accent">
         {{ analytics.mechanic or "Other / Casual" }}
       </div>
       <div style="margin-top: 0.25rem;">
@@ -52,7 +52,7 @@
       </div>
     </div>
 
-    <div style="background: rgba(0,0,0,0.2); padding: 0.75rem; border-radius: 0.375rem; border: 1px solid var(--surface-border);">
+    <div>
       <div style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">Thể loại phụ (Subgenre)</div>
       <div style="font-size: 1.1rem; font-weight: 700; color: var(--text); margin-top: 0.25rem;">
         {{ analytics.subgenre or "Casual" }}
@@ -62,28 +62,29 @@
       </div>
     </div>
 
-    <div style="background: rgba(0,0,0,0.2); padding: 0.75rem; border-radius: 0.375rem; border: 1px solid var(--surface-border);">
-      <div style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">Độ phủ ASEAN+ (Cross-Market)</div>
-      <div style="font-size: 1.1rem; font-weight: 700; color: #facc15; margin-top: 0.25rem;">
-        {{ analytics.cross_market_count or 1 }} / 11 thị trường
+    <div>
+      <div style="color: var(--text-muted); font-size: 0.75rem;">Hiện diện trong BXH</div>
+      <div class="table-callout table-callout-warning">
+        {% if analytics.observed_market_count %}{{ analytics.presence_count }}/{{ analytics.observed_market_count }} thị trường đã quan sát{% else %}Chưa đủ dữ liệu{% endif %}
       </div>
       <div style="margin-top: 0.35rem; display: flex; gap: 0.25rem; flex-wrap: wrap;">
-        {% for m in analytics.cross_markets or [country] %}
+        {% for m in analytics.presence_markets %}
           <span class="badge badge-cross-market">{{ m | upper }}</span>
         {% endfor %}
       </div>
+      <p class="notice">BXH cùng loại · {{ analytics.presence_day or 'Chưa có ngày quan sát' }} UTC · chỉ dữ liệu hoàn chỉnh.</p>
     </div>
   </div>
 
   {% if analytics.mechanic_evidence %}
-    <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 0.375rem; font-size: 0.85rem;">
-      <span style="font-weight: 600; color: #60a5fa;">Từ khóa khớp (Evidence):</span>
-      <code style="color: var(--text); margin-left: 0.5rem;">{{ analytics.mechanic_evidence }}</code>
+    <div class="game-evidence">
+      <span>Từ khóa khớp (Evidence):</span>
+      <code>{{ analytics.mechanic_evidence }}</code>
     </div>
   {% endif %}
 
   {% if analytics.signal_reasons %}
-    <div style="margin-top: 0.5rem; padding: 0.75rem; background: rgba(0, 0, 0, 0.2); border-radius: 0.375rem; font-size: 0.85rem;">
+    <div class="signal-reasons">
       <span style="font-weight: 600; color: var(--text-muted);">Lý do phân loại tín hiệu:</span>
       <ul style="margin-left: 1.5rem; margin-top: 0.25rem; color: var(--text);">
         {% for r in analytics.signal_reasons %}
@@ -99,23 +100,23 @@
   <div class="card-title">💰 Mô hình Kiếm tiền & Gói nạp (IAP)</div>
   <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
     <div>
-      <span class="badge" style="font-size: 0.85rem; padding: 0.35rem 0.75rem; background: {% if analytics.monetization_model == 'HYBRID' %}#dbeafe; color: #1e40af;{% elif analytics.monetization_model == 'PURE_IAP' %}#fef3c7; color: #92400e;{% elif analytics.monetization_model == 'PAID_PREMIUM' %}#f3e8ff; color: #6b21a8;{% else %}#f1f5f9; color: #475569;{% endif %}">
+      <span class="badge badge-model">
         {{ analytics.monetization_model or metadata.monetization_model or 'PURE_ADS' }}
       </span>
     </div>
     {% if metadata.price is not none %}
       <div style="font-size: 0.9rem; color: var(--text-muted);">
-        Giá tải app: <strong>{% if metadata.price > 0 %}{{ metadata.price }} {{ metadata.currency or 'USD' }}{% else %}Miễn phí (Free){% endif %}</strong>
+    Giá tải app: <strong>{% if metadata.price is not defined or metadata.price is none %}Chưa có dữ liệu{% elif metadata.price > 0 %}{{ metadata.price }} {{ metadata.currency or 'USD' }}{% else %}Miễn phí (Free){% endif %}</strong>
       </div>
     {% endif %}
     {% if analytics.grossing_rank %}
-      <div style="font-size: 0.9rem; color: #d97706; font-weight: 600;">
+      <div class="table-callout table-callout-warning">
         💰 Doanh thu Top Grossing: #{{ analytics.grossing_rank }}
       </div>
     {% endif %}
     {% if analytics.monetization_efficiency_flag %}
       <div>
-        <span class="badge" style="font-size: 0.75rem; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;">
+        <span class="badge badge-efficiency">
           {{ analytics.monetization_efficiency_flag }}
         </span>
       </div>
@@ -126,9 +127,9 @@
     <div style="font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">Danh sách gói In-App Purchase (IAP):</div>
     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;">
       {% for iap in metadata.in_app_purchases %}
-        <div style="padding: 0.5rem; background: rgba(0,0,0,0.2); border: 1px solid var(--surface-border); border-radius: 6px; font-size: 0.85rem;">
+        <div class="iap-item">
           <div style="font-weight: 600;">{{ iap.name or iap.title or "Gói IAP" }}</div>
-          <div style="color: #10b981; font-weight: 700; margin-top: 0.2rem;">
+          <div class="iap-price">
             {{ iap.price_formatted or iap.formattedPrice or iap.price or "—" }}
           </div>
         </div>
@@ -163,7 +164,7 @@
               <td class="rank"><strong>#{{ h.current_rank }}</strong></td>
               <td>
                 {% if h.grossing_rank %}
-                  <strong style="color: #d97706;">#{{ h.grossing_rank }}</strong>
+                  <strong class="table-callout-warning">#{{ h.grossing_rank }}</strong>
                 {% else %}
                   <span style="color: var(--text-muted);">—</span>
                 {% endif %}
@@ -222,7 +223,7 @@
 
 <div class="card">
   <div class="card-title">Mô tả ứng dụng (Nguồn Apple Store)</div>
-  <div style="white-space: pre-line; font-size: 0.9rem; line-height: 1.6; color: var(--text-muted); max-height: 400px; overflow-y: auto; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 0.375rem;">
+  <div class="game-description">
     {{ metadata.description or "Không có thông tin mô tả chi tiết." }}
   </div>
 </div>
@@ -234,7 +235,7 @@
     <div>Quốc gia: <strong>{{ country | upper }}</strong></div>
     <div>Thời điểm lấy metadata: <strong>{{ metadata.fetched_at_vn or "—" }}</strong></div>
     {% if metadata.raw_hash %}
-      <div>Raw Evidence Hash: <a href="/evidence/{{ metadata.raw_hash }}" style="color: var(--primary); font-family: monospace;">{{ metadata.raw_hash }}</a></div>
+    <div>Raw Evidence Hash: <a href="/evidence/{{ metadata.raw_hash }}" class="run-id">{{ metadata.raw_hash }}</a></div>
     {% endif %}
   </div>
 </div>

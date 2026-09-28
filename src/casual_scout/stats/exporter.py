@@ -10,7 +10,7 @@ def export_shortlist_to_csv(items: list[dict[str, Any]]) -> str:
     
     writer.writerow([
         "App ID", "Title", "Developer", "Subgenre", "Mechanic",
-        "Primary Country", "Rank At Bookmark", "Opportunity Score",
+        "Primary Country", "Rank At Bookmark",
         "Status", "Priority", "Notes", "Tags", "Updated At"
     ])
     
@@ -23,7 +23,6 @@ def export_shortlist_to_csv(items: list[dict[str, Any]]) -> str:
             it.get("mechanic") or "",
             it.get("primary_country"),
             it.get("rank_at_bookmark"),
-            it.get("opportunity_score") or "",
             it.get("status"),
             it.get("priority"),
             it.get("notes") or "",
@@ -40,7 +39,8 @@ def export_radar_to_csv(radar_items: list[dict[str, Any]]) -> str:
     writer.writerow([
         "App ID", "Title", "Developer", "Subgenre", "Mechanic",
         "Current Rank", "Delta 1D", "Delta 3D", "Signal",
-        "Cross Market Count", "Opportunity Score", "Opportunity Badge"
+        "Presence Count", "Observed Market Count", "Present Markets", "Reasons",
+        "Comparable Markets", "Added Markets", "Lost Markets"
     ])
     
     for r in radar_items:
@@ -53,10 +53,14 @@ def export_radar_to_csv(radar_items: list[dict[str, Any]]) -> str:
             r.get("current_rank"),
             r.get("delta_1d") if r.get("delta_1d") is not None else "",
             r.get("delta_3d") if r.get("delta_3d") is not None else "",
-            r.get("signal") or "",
-            r.get("cross_market_count") or 1,
-            r.get("opportunity_score") or 0.0,
-            r.get("opportunity_badge") or ""
+            r.get("noteworthy_label") or "",
+            r.get("presence_count") if r.get("presence_count") is not None else "",
+            r.get("observed_market_count", 0),
+            ", ".join(r.get("presence_markets") or []),
+            "; ".join(r.get("noteworthy_reasons") or []),
+            ", ".join(r.get("comparable_markets") or []),
+            ", ".join(r.get("added_markets") or []),
+            ", ".join(r.get("lost_markets") or [])
         ])
     return output.getvalue()
 

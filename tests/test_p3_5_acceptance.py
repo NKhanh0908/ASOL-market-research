@@ -75,4 +75,6 @@ def test_p3_5_exposes_grossing_snapshot_and_monetized_radar(tmp_path: Path):
     radar = client.get("/api/stats/radar?country=vn&date=2026-09-11").json()
     assert radar[0]["grossing_rank"] == 3
     assert radar[0]["monetization_model"] == "HYBRID"
-    assert radar[0]["grossing_power"] == 15.0
+    assert "grossing_power" not in radar[0]
+    assert radar[0]["presence_count"] == radar[0]["observed_market_count"] == 1
+    assert radar[0]["noteworthy_label"] == "Chưa đủ dữ liệu so sánh"

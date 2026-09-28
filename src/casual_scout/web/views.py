@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from casual_scout.analysis.monetization import classify_monetization_model
 from casual_scout.analysis.taxonomy import classify_app
+from casual_scout.config import IOS_COLLECTION_COUNTRIES
 from casual_scout.models import Chart
 from casual_scout.stats.aggregator import (
     build_market_heatmap,
@@ -15,7 +16,7 @@ from casual_scout.stats.aggregator import (
     compute_genre_distribution,
     compute_mechanic_distribution,
 )
-from casual_scout.stats.radar import rank_opportunities
+from casual_scout.stats.noteworthy import noteworthy_for_date, observed_charts, presence
 from casual_scout.stats.shortlist import ShortlistService
 from casual_scout.storage import Repository
 
@@ -247,12 +248,20 @@ def get_data_view(
                 entries_data.append(row_dict)
 
     available_dates = repo.get_available_analytics_dates()
+    if selected_snapshot:
+        observation_day = selected_snapshot["observed_at"][:10]
+        charts = observed_charts(repo, observation_day, collection)
+        for entry in entries_data:
+            entry.update(presence(entry["app_id"], charts))
+            entry["cross_market_count"] = entry["presence_count"]
+            entry["cross_markets"] = entry["presence_markets"]
 
     return {
         "country": country,
         "feed_type": feed_type_norm,
         "current_market": current_market,
-        "markets": markets,
+        "markets": [m for m in markets if m['country'] in IOS_COLLECTION_COUNTRIES],
+        "legacy_market": current_market if country not in IOS_COLLECTION_COUNTRIES else None,
         "snapshots": snapshots_list,
         "selected_snapshot": selected_snapshot,
         "entries": entries_data,
@@ -359,20 +368,6 @@ def get_game_view(repo: Repository, app_id: str, country: str = 'vn', snapshot_i
                     else []
                 )
 
-        # Dynamic cross-market lookup if not available
-        cross_markets_found = []
-        cm_rows = conn.execute(
-            """
-            SELECT DISTINCT c.country FROM entries e
-            JOIN snapshots s ON s.id = e.snapshot_id
-            JOIN market_runs mr ON mr.id = s.market_run_id
-            JOIN charts c ON c.id = mr.chart_id
-            WHERE e.app_id = ?
-            """,
-            (app_id,),
-        ).fetchall()
-        cross_markets_found = [r["country"] for r in cm_rows] if cm_rows else [country]
-
         if not latest_analytics:
             title = meta_dict.get("name") or (entry_row["name"] if entry_row else app_id)
             desc = meta_dict.get("description") or ""
@@ -389,15 +384,20 @@ def get_game_view(repo: Repository, app_id: str, country: str = 'vn', snapshot_i
                 "mechanic": classified["mechanic"],
                 "mechanic_confidence": classified["confidence"],
                 "mechanic_evidence": classified["evidence"],
-                "cross_market_count": len(cross_markets_found),
-                "cross_markets": cross_markets_found,
                 "signal": "STEADY",
                 "signal_reasons": [],
             }
-        else:
-            if not latest_analytics.get("cross_markets"):
-                latest_analytics["cross_markets"] = cross_markets_found
-                latest_analytics["cross_market_count"] = len(cross_markets_found)
+        observation = conn.execute(
+            """SELECT s.observed_at, c.collection FROM snapshots s
+            JOIN market_runs mr ON mr.id=s.market_run_id
+            JOIN charts c ON c.id=mr.chart_id WHERE s.id=?""",
+            (entry_row["snapshot_id"] if entry_row else None,),
+        ).fetchone()
+        charts = observed_charts(repo, observation["observed_at"][:10], observation["collection"]) if observation else {}
+        latest_analytics.update(presence(app_id, charts))
+        latest_analytics["cross_market_count"] = latest_analytics["presence_count"]
+        latest_analytics["cross_markets"] = latest_analytics["presence_markets"]
+        latest_analytics["presence_day"] = observation["observed_at"][:10] if observation else None
 
         return {
             "app_id": app_id,
@@ -482,7 +482,13 @@ def get_dashboard_view(
     if not date_str:
         date_str = available_dates[0] if available_dates else datetime.now(UTC).strftime("%Y-%m-%d")
 
-    markets = get_markets(repo)
+    all_markets = get_markets(repo)
+    markets = [m for m in all_markets if m['country'] in IOS_COLLECTION_COUNTRIES]
+    country = country.lower()
+    legacy_market = next((m for m in all_markets
+                          if m['country'] == country and country not in IOS_COLLECTION_COUNTRIES), None)
+    scope = IOS_COLLECTION_COUNTRIES if country == 'all' else (country,)
+    scope_params = ','.join('?' for _ in scope)
     shortlist_service = ShortlistService(repo)
     shortlist_items = shortlist_service.list_shortlists()
     shortlisted_ids = {it["app_id"] for it in shortlist_items}
@@ -490,7 +496,7 @@ def get_dashboard_view(
     with closing(repo._connect()) as conn:
         if country.lower() == "all":
             rows = conn.execute(
-                """
+                f"""
                 SELECT dra.*,
                        COALESCE(
                            (SELECT name FROM metadata_versions mv WHERE mv.app_id = dra.app_id AND mv.country = dra.country ORDER BY fetched_at DESC LIMIT 1),
@@ -503,10 +509,10 @@ def get_dashboard_view(
                        ) AS developer,
                        (SELECT icon_url FROM entries e WHERE e.app_id = dra.app_id LIMIT 1) AS icon_url
                 FROM daily_rank_analytics dra
-                WHERE dra.date = ?
+                WHERE dra.date = ? AND dra.country IN ({scope_params})
                 ORDER BY dra.current_rank ASC
                 """,
-                (date_str,),
+                (date_str, *scope),
             ).fetchall()
         else:
             rows = conn.execute(
@@ -542,14 +548,14 @@ def get_dashboard_view(
             records_by_country[c].append(d)
 
         hist_rows = conn.execute(
-            """
+            f"""
             SELECT date, subgenre
             FROM daily_rank_analytics
-            WHERE date <= ?
+            WHERE date <= ? AND country IN ({scope_params})
             ORDER BY date DESC
             LIMIT 7700
             """,
-            (date_str,),
+            (date_str, *scope),
         ).fetchall()
         history_records = [dict(hr) for hr in hist_rows]
         latest_collection = conn.execute(
@@ -569,7 +575,10 @@ def get_dashboard_view(
     mech_dist = compute_mechanic_distribution(records)
     heatmap = build_market_heatmap(records_by_country)
     trends = compute_7day_subgenre_trends(history_records)
-    radar_items = rank_opportunities(records, shortlisted_app_ids=shortlisted_ids)
+    radar_items = noteworthy_for_date(
+        repo, records, date_str, shortlisted_ids,
+        markets=(*IOS_COLLECTION_COUNTRIES, country) if legacy_market else IOS_COLLECTION_COUNTRIES,
+    )
 
     top_genre = None
     if genre_dist.get("breakdown"):
@@ -589,8 +598,8 @@ def get_dashboard_view(
 
     summary = {
         "total_games": len(records),
-        "hot_waves_count": sum(1 for r in radar_items if r.get("opportunity_score", 0) >= 75.0),
-        "fast_risers_count": sum(1 for r in records if r.get("signal") == "FAST_RISER"),
+        "noteworthy_count": sum(r["noteworthy"] for r in radar_items),
+        "fast_risers_count": sum(bool(r["rising_markets"]) for r in radar_items),
         "top_subgenre": top_genre,
         "genre_distribution": genre_dist,
         "mechanic_distribution": mech_dist,
@@ -600,6 +609,7 @@ def get_dashboard_view(
     return {
         "selected_date": date_str,
         "selected_country": country,
+        "legacy_market": legacy_market,
         "available_dates": available_dates or [date_str],
         "markets": markets,
         "summary": summary,

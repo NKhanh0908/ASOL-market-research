@@ -13,8 +13,12 @@ dependencies = [
     "psutil>=6.0,<7",
     "itsdangerous>=2.2,<3",
     "python-multipart>=0.0.9,<1",
+    "pydantic>=2,<3",
     "tzdata>=2024.1",
 ]
+
+[project.scripts]
+casual_scout = "casual_scout.cli:main"
 
 [project.optional-dependencies]
 android = ["selenium==4.49.0"]
@@ -34,4 +38,4 @@ line-length = 100
 where = ["src"]
 
 [tool.setuptools.package-data]
-casual_scout = ["storage/schema.sql", "android/schema.sql", "web/templates/*.html", "web/static/*"]
+casual_scout = ["storage/schema.sql", "ai/schema.sql", "android/schema.sql", "web/templates/*.html", "web/static/*"]

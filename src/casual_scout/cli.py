@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -57,7 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         "--markets",
         dest="countries",
         type=str,
-        default="vn,us,bn,kh,id,la,my,mm,ph,sg,th,tl",
+        default="vn,th,id,my,ph,sg,la,kh,us",
         help="Comma-separated country codes (e.g. vn,us)",
     )
     collect_parser.add_argument(
@@ -328,8 +329,20 @@ def main(argv: list[str] | None = None) -> int:
         settings = Settings(args.data_dir)
         provider = AppleProvider(settings)
         collector = Collector(repo, provider, jobs)
-        status = collector.execute(run_id, enrich=not args.no_enrich)
-        sys.stdout.write(f"Run {run_id} completed with status: {status}\n")
+        def _log_progress(msg: str) -> None:
+            sys.stdout.write(f"{msg}\n")
+            sys.stdout.flush()
+
+        sys.stdout.write(f"🚀 Bắt đầu thu thập dữ liệu (Run ID: {run_id})\n")
+        sys.stdout.write(f"   Thị trường ({len(country_list)}): {', '.join(c.upper() for c in country_list)}\n")
+        chart_label = getattr(args, 'chart_type', 'all')
+        sys.stdout.write(f"   Loại chart: {chart_label.upper()}\n")
+        sys.stdout.write(f"   Làm giàu metadata: {'BẬT' if not args.no_enrich else 'TẮT (--no-enrich)'}\n\n")
+        sys.stdout.flush()
+
+        status = collector.execute(run_id, enrich=not args.no_enrich, on_progress=_log_progress)
+        sys.stdout.write(f"\n✅ Hoàn thành thu thập (Run ID: {run_id}) với trạng thái: {status.upper()}\n")
+        sys.stdout.flush()
         return 0 if status in ("succeeded", "partial") else 1
 
     if args.command == "work":
@@ -352,7 +365,22 @@ def main(argv: list[str] | None = None) -> int:
         status = collector.execute(args.run_id, enrich=not args.no_enrich)
         if status not in ("succeeded", "partial"):
             return 1
-        AnalysisService(repo).analyze_date(datetime.now(UTC).strftime("%Y-%m-%d"), ["vn"])
+        # Analyze only complete observations from this run, on their actual UTC days.
+        # Multi-market collection may cross midnight; wall-clock completion is not its scope.
+        with closing(repo._connect()) as connection:
+            observed = connection.execute(
+                """SELECT DISTINCT substr(s.observed_at,1,10) AS day, c.country
+                   FROM snapshots s JOIN market_runs mr ON mr.id=s.market_run_id
+                   JOIN charts c ON c.id=mr.chart_id
+                   WHERE mr.run_id=? AND s.quality='complete'
+                     AND c.provider='apple' AND c.platform='ios'
+                   ORDER BY day, c.country""", (args.run_id,),
+            ).fetchall()
+        countries_by_day: dict[str, list[str]] = {}
+        for row in observed:
+            countries_by_day.setdefault(row['day'], []).append(row['country'])
+        for day, countries in countries_by_day.items():
+            AnalysisService(repo).analyze_date(day, countries)
         return 0
 
     if args.command == "serve":
@@ -524,7 +552,7 @@ def main(argv: list[str] | None = None) -> int:
             s = data["summary"]
             sys.stdout.write(f"# Market Summary for {args.country.upper()} on {data['selected_date']}\n")
             sys.stdout.write(f"- Total games: **{s['total_games']}**\n")
-            sys.stdout.write(f"- Hot Waves (Score >= 75): **{s['hot_waves_count']}**\n")
+            sys.stdout.write(f"- Noteworthy games: **{s['noteworthy_count']}**\n")
             sys.stdout.write(f"- Fast Risers: **{s['fast_risers_count']}**\n")
             sys.stdout.write(f"- Dominant Subgenre: **{s['top_subgenre'] or '—'}**\n\n")
             
@@ -553,11 +581,11 @@ def main(argv: list[str] | None = None) -> int:
                 sys.stdout.write(json.dumps(radar_items, indent=2, ensure_ascii=False) + "\n")
                 return 0
             
-            sys.stdout.write(f"# Opportunity Radar (Top {len(radar_items)}) on {data['selected_date']}\n\n")
-            sys.stdout.write("| Score | Badge | Rank | App ID | Title | Genre | Mechanic | Monetization | Breadth |\n")
+            sys.stdout.write(f"# Noteworthy Games (Top {len(radar_items)}) on {data['selected_date']}\n\n")
+            sys.stdout.write("| Signal | Reasons | Rank | App ID | Title | Genre | Mechanic | Monetization | Observed presence |\n")
             sys.stdout.write("|---|---|---|---|---|---|---|---|---|\n")
             for r in radar_items:
-                sys.stdout.write(f"| {r['opportunity_score']} | {r['opportunity_badge']} | #{r['current_rank']} | `{r['app_id']}` | {r.get('title') or r['app_id']} | {r.get('subgenre') or '—'} | {r.get('mechanic') or '—'} | {r.get('monetization_model') or '—'} | {r.get('cross_market_count')}/11 |\n")
+                sys.stdout.write(f"| {r['noteworthy_label']} | {'; '.join(r['noteworthy_reasons'])} | #{r['current_rank']} | `{r['app_id']}` | {r.get('title') or r['app_id']} | {r.get('subgenre') or '—'} | {r.get('mechanic') or '—'} | {r.get('monetization_model') or '—'} | {r['presence_count'] if r['presence_count'] is not None else '—'}/{r['observed_market_count']} |\n")
             return 0
 
     if args.command == "shortlist":

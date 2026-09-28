@@ -56,7 +56,8 @@ def test_web_dashboard_page(client: TestClient):
     resp = client.get("/dashboard")
     assert resp.status_code == 200
     assert "Market Research Dashboard" in resp.text
-    assert "Opportunity Radar" in resp.text
+    assert "Game đáng chú ý" in resp.text
+    assert "Điểm Cơ Hội" not in resp.text
 
 def test_web_shortlist_page(client: TestClient):
     resp = client.get("/shortlist")
@@ -83,7 +84,9 @@ def test_api_stats_endpoints(client: TestClient):
     assert r_resp.status_code == 200
     r_data = r_resp.json()
     assert len(r_data) == 2
-    assert r_data[0]["opportunity_score"] >= 75.0
+    assert "opportunity_score" not in r_data[0]
+    assert r_data[0]["noteworthy_label"] == "Chưa đủ dữ liệu so sánh"
+    assert r_data[0]["observed_market_count"] == 0
 
 def test_api_shortlist_crud(client: TestClient):
     headers = {"Origin": "http://127.0.0.1:8000"}

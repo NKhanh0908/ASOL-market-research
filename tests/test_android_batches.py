@@ -65,6 +65,51 @@ def test_committed_batch_visible_from_another_connection_with_unknown_baseline(t
     assert independent["entries"][1]["metadata_status"] == "pending"
 
 
+def test_google_play_category_controls_casual_classification_and_subgenre(tmp_path):
+    _repo, store = store_at(tmp_path)
+    job = store.enqueue()
+    store.dispatch()
+    store.save_chart(
+        job,
+        "top-free",
+        [
+            {"package": "com.example.casual", "rank": 1, "name": "Casual"},
+            {"package": "com.example.other", "rank": 2, "name": "Other"},
+            {"package": "com.example.unknown", "rank": 3, "name": "Unknown"},
+        ],
+        "fixture.html",
+    )
+
+    store.save_batch(
+        job,
+        [
+            {
+                "package": "com.example.casual",
+                "metadata_status": "complete",
+                "application_category": "GAME_CASUAL",
+                "google_play_genres": [{"label": "Mô phỏng", "code": "GAME_SIMULATION"}],
+                "developer": "Example Studio",
+                "description": "A simulation game",
+            },
+            {
+                "package": "com.example.other",
+                "metadata_status": "complete",
+                "application_category": "GAME_ACTION",
+                "google_play_genres": [{"label": "Hành động", "code": "GAME_ACTION"}],
+            },
+            {"package": "com.example.unknown", "metadata_status": "complete"},
+        ],
+    )
+
+    rows = {entry["package"]: entry for entry in store.view(job)["entries"]}
+    assert rows["com.example.casual"]["casual_status"] == "casual"
+    assert rows["com.example.casual"]["subgenre"] == "Simulation"
+    assert rows["com.example.casual"]["developer"] == "Example Studio"
+    assert rows["com.example.other"]["casual_status"] == "not_casual"
+    assert rows["com.example.other"]["subgenre"] == "Action"
+    assert rows["com.example.unknown"]["casual_status"] == "unknown"
+
+
 def test_schedule_only_claims_seven_am_once_and_preserves_pending(tmp_path):
     _repo, store = store_at(tmp_path)
     store.set_schedule(True)
@@ -138,6 +183,8 @@ def test_cache_reuses_only_recent_metadata_and_never_old_ranks(tmp_path):
                 "developer": "Studio",
                 "metadata_status": "complete",
                 "fetched_at": datetime.now(UTC).isoformat(),
+                "application_category": "GAME_CASUAL",
+                "google_play_genres": [{"label": "Puzzle", "code": "GAME_PUZZLE"}],
             }
         ],
     )

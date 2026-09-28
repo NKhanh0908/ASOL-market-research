@@ -1,5 +1,7 @@
+import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -153,13 +155,13 @@ def test_data_page_shows_one_time_ios_schedule_controls(web_setup):
     assert "/api/one-time-schedule" in response.text
 
 
-def test_dashboard_shows_daily_vietnam_collection_controls(web_setup):
+def test_dashboard_shows_daily_group_collection_controls(web_setup):
     _repo, client, _launcher, _calls = web_setup
 
     response = client.get("/dashboard")
 
     assert response.status_code == 200
-    assert "Thu thập iOS VN" in response.text
+    assert "Thu thập iOS · 9 thị trường" in response.text
     assert "Crawl ngay" in response.text
     assert "07:00" in response.text
 
@@ -236,5 +238,117 @@ def test_game_detail_escapes_script_tags(web_setup, evidence_dir: Path):
 
     game_res = client.get(f"/games/{app_id}?country=vn&snapshot_id={snapshot_id}")
     assert game_res.status_code == 200
+    assert 'class="page-heading"' in game_res.text
+    assert 'href="/data"' in game_res.text
     assert "<script>alert" not in game_res.text
     assert "&lt;script&gt;alert" in game_res.text
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/dashboard", "/", "/data", "/android", "/shortlist", "/runs"],
+)
+def test_primary_pages_keep_existing_routes_and_navigation_targets(web_setup, path):
+    _repo, client, _launcher, _calls = web_setup
+
+    response = client.get(path)
+
+    assert response.status_code == 200
+    for destination in ("/dashboard", "/data", "/android", "/shortlist", "/runs"):
+        assert f'href="{destination}"' in response.text
+
+
+def test_shared_navigation_uses_galaxy_labels_and_semantic_active_state(web_setup):
+    _repo, client, _launcher, _calls = web_setup
+
+    response = client.get("/dashboard")
+    assert response.status_code == 200
+    assert re.search(r'<nav(?=[^>]*aria-label="Điều hướng chính")[^>]*>', response.text)
+    for label in ("Tổng quan", "iOS", "Android", "Shortlist", "Lịch sử"):
+        assert label in response.text
+    assert re.search(
+        r'<a(?=[^>]*href="/dashboard")(?=[^>]*aria-current="page")[^>]*>',
+        response.text,
+    )
+
+
+@pytest.mark.parametrize("page", ["/dashboard", "/data", "/android", "/shortlist", "/runs"])
+def test_pages_load_content_versioned_static_assets(web_setup, page):
+    _repo, client, _launcher, _calls = web_setup
+    html = client.get(page).text
+    asset_urls = re.findall(r'(?:href|src)="(/static/[^" ]+)"', html)
+    assert len(asset_urls) == (3 if page == "/android" else 1)
+    for url in asset_urls:
+        asset = client.get(url)
+        assert asset.status_code == 200
+        expected_version = sha256(asset.content).hexdigest()[:12]
+        assert url.endswith(f"?v={expected_version}")
+    stylesheet = client.get(asset_urls[0]).text
+    assert "--color-space:" in stylesheet
+    assert ".nav-link svg" in stylesheet
+
+
+def test_stylesheet_url_changes_when_css_changes_without_server_restart(web_setup, monkeypatch):
+    _repo, client, _launcher, _calls = web_setup
+
+    def stylesheet_url():
+        return re.search(r'href="(/static/app\.css[^" ]*)"', client.get("/data").text)[1]
+
+    previous_url = stylesheet_url()
+    read_bytes = Path.read_bytes
+
+    def changed_css(path):
+        content = read_bytes(path)
+        return content + b"\n/* new stylesheet revision */" if path.name == "app.css" else content
+
+    monkeypatch.setattr(Path, "read_bytes", changed_css)
+    assert stylesheet_url() != previous_url
+
+
+def test_header_icons_have_intrinsic_dimensions_when_stylesheet_is_unavailable(web_setup):
+    _repo, client, _launcher, _calls = web_setup
+    header = re.search(r"<header\b.*?</header>", client.get("/data").text, re.DOTALL)[0]
+    icons = re.findall(r"<svg\b[^>]*>", header)
+    assert len(icons) == 6
+    for icon in icons:
+        for dimension in ("width", "height"):
+            value = re.search(rf'{dimension}="(\d+)"', icon)
+            assert value is not None
+            assert 0 < int(value[1]) <= 32
+
+
+def test_dashboard_and_ios_data_distinguish_saved_dates_from_future_collection(web_setup):
+    _repo, client, _launcher, _calls = web_setup
+
+    dashboard = client.get("/dashboard")
+    data = client.get("/data")
+
+    assert dashboard.status_code == data.status_code == 200
+    assert "Ngày dữ liệu" in dashboard.text
+    assert "Dữ liệu đã lưu" in dashboard.text
+    assert "Bản chụp đã lưu" in data.text
+    assert "Lên lịch crawl" in data.text
+    assert "Thời điểm chạy" in data.text
+    assert "Top Free Casual · cùng 9 thị trường" in data.text
+    assert 'action="/runs"' in data.text
+    assert 'id="one-time-schedule-at"' in data.text
+    assert "/api/one-time-schedule" in data.text
+
+
+def test_shortlist_and_run_pages_keep_primary_actions_and_page_hierarchy(web_setup):
+    repo, client, _launcher, _calls = web_setup
+    from casual_scout.collection.jobs import JobService
+
+    run_id = JobService(repo).submit("manual", ["vn"], "req-ui-history")
+    shortlist = client.get("/shortlist")
+    runs = client.get("/runs")
+    run_detail = client.get(f"/runs/{run_id}")
+
+    assert shortlist.status_code == runs.status_code == run_detail.status_code == 200
+    assert 'class="page-heading"' in shortlist.text
+    assert "/api/export/shortlist?format=csv" in shortlist.text
+    assert "/api/export/shortlist?format=json" in shortlist.text
+    assert f'href="/runs/{run_id}"' in runs.text
+    assert 'class="page-heading"' in runs.text
+    assert 'class="page-heading"' in run_detail.text
+    assert "/runs/${runId}/status" in run_detail.text

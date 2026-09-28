@@ -24,6 +24,7 @@ def _create_snapshot_with_entries(
     entries: list[tuple[str, int, str]],  # (app_id, rank, name)
     metadata_map: dict[str, dict] | None = None,
     collection: str = "topfreeapplications",
+    quality: str = "complete",
 ):
     chart_id = f'chart-{country}-{collection}'
     mr_id = f'mr-{snap_id}'
@@ -52,8 +53,8 @@ def _create_snapshot_with_entries(
         )
         conn.execute(
             'INSERT INTO snapshots (id, market_run_id, raw_hash, observed_at, quality, issues_json) '
-            'VALUES (?, ?, ?, ?, \'complete\', \'[]\')',
-            (snap_id, mr_id, hash_id, observed_time_str),
+            'VALUES (?, ?, ?, ?, ?, \'[]\')',
+            (snap_id, mr_id, hash_id, observed_time_str, quality),
         )
 
         for app_id, rank, name in entries:

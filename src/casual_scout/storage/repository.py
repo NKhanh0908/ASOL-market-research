@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from casual_scout.config import Settings
+from casual_scout.config import IOS_COLLECTION_COUNTRIES, IOS_COLLECTION_SCOPE, Settings
 from casual_scout.models import Chart, HttpResult, ParsedChart
 from casual_scout.storage.raw import RawStore
 
@@ -59,9 +59,11 @@ class Repository:
     def initialize(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         schema = Path(__file__).with_name("schema.sql").read_text(encoding="utf-8")
+        ai_schema = (Path(__file__).parents[1] / "ai" / "schema.sql").read_text(encoding="utf-8")
         now = _utc_text(datetime.now(UTC))
         with closing(self._connect()) as connection:
             connection.executescript(schema)
+            connection.executescript(ai_schema)
             # Idempotent column migrations for Phase 3.5
             meta_cols = [r[1] for r in connection.execute("PRAGMA table_info(metadata_versions)").fetchall()]
             if "in_app_purchases_json" not in meta_cols:
@@ -129,7 +131,10 @@ class Repository:
             "enabled": bool(row["enabled"]),
             "time": str(row["time_local"]),
             "timezone": str(row["timezone"]),
-            "country": str(row["country"]),
+            # The legacy single-country column is retained for old databases.
+            "country": None,
+            "scope": IOS_COLLECTION_SCOPE,
+            "countries": list(IOS_COLLECTION_COUNTRIES),
             "chart_type": str(row["chart_type"]),
             "last_triggered_local_date": row["last_triggered_local_date"],
         }
@@ -169,7 +174,8 @@ class Repository:
             ).fetchone()
         if row is None:
             raise RuntimeError("one-time collection schedule has not been initialized")
-        return dict(row)
+        return {**dict(row), "scope": IOS_COLLECTION_SCOPE,
+                "countries": list(IOS_COLLECTION_COUNTRIES)}
 
     def schedule_one_time_collection(
         self, scheduled_for: datetime, scheduled_for_local: str

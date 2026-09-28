@@ -3,67 +3,44 @@
 {% block title %}Dữ liệu thị trường — {{ current_market.name }}{% endblock %}
 
 {% block content %}
-<div class="card">
-  <!-- Chart Feed Type Switcher Tabs -->
-  <div style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border); padding-bottom: 0.75rem;">
-    <a href="/data?country={{ country }}&feed_type=top-free"
-       class="btn {% if feed_type == 'top-free' %}btn-primary{% else %}btn-secondary{% endif %}"
-       style="padding: 0.5rem 1rem; text-decoration: none; font-weight: 600;">
-      🆓 Top Free (100)
-    </a>
-    <a href="/data?country={{ country }}&feed_type=top-grossing"
-       class="btn {% if feed_type == 'top-grossing' %}btn-primary{% else %}btn-secondary{% endif %}"
-       style="padding: 0.5rem 1rem; text-decoration: none; font-weight: 600;">
-      💰 Top Grossing (100)
-    </a>
-  </div>
-
-  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-    <div>
-      <h2 style="font-size: 1.25rem; font-weight: 700;">Top 100 {% if feed_type == 'top-grossing' %}Grossing{% else %}Free{% endif %} Casual Games — {{ current_market.name }}</h2>
+<div class="card data-controls">
+    <div class="data-title-row">
+      <div>
+        <h1 class="page-heading">iOS · Top 100 {% if feed_type == 'top-grossing' %}Grossing{% else %}Free{% endif %}</h1>
+        <p class="page-lede">Casual Games · {{ current_market.name }}</p>
       <div class="notice">
         <span class="badge badge-complete">Casual theo Apple</span>
         {% if feed_type == 'top-grossing' %}
-          <span style="margin-left: 0.5rem; color: #f59e0b; font-weight: 600;">💰 Doanh thu cao nhất (Top Grossing)</span>
+          <span class="monetization-callout">Doanh thu cao nhất (Top Grossing)</span>
         {% else %}
           <span style="margin-left: 0.5rem;">⚠️ Không có số lượt tải</span>
         {% endif %}
         {% if current_market.source_status == 'unverified' %}
-          <span class="badge badge-failed" style="margin-left: 0.5rem;">Nguồn chưa xác minh</span>
+          <span class="badge badge-failed">Nguồn chưa xác minh</span>
         {% endif %}
       </div>
     </div>
 
-    <form method="POST" action="/runs" style="display: flex; gap: 0.5rem;">
+    <form method="POST" action="/runs" class="collection-action">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <input type="hidden" name="country" value="{{ country }}">
-      <input type="hidden" name="request_key" value="manual-{{ country }}-{{ now_key }}">
-      <button type="submit" class="btn">⚡ Thu thập ngay</button>
+      <input type="hidden" name="country" value="{{ ios_collection_scope }}">
+      <input type="hidden" name="request_key" value="manual-{{ ios_collection_scope }}-{{ now_key }}">
+      <button type="submit" class="btn">Crawl ngay · {{ ios_collection_count }} thị trường</button>
     </form>
   </div>
 
-  <section aria-labelledby="one-time-schedule-heading" style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--surface);">
-    <div style="display: flex; justify-content: space-between; gap: 1rem; align-items: center; flex-wrap: wrap;">
-      <div>
-        <h3 id="one-time-schedule-heading" style="margin: 0; font-size: 1rem;">Đặt lịch crawl iOS một lần</h3>
-        <p style="margin: 0.3rem 0 0; color: var(--text-muted); font-size: 0.875rem;">Top Free Casual VN · giờ Việt Nam (Asia/Ho_Chi_Minh)</p>
-      </div>
-      <a class="btn btn-secondary" href="/android">Android · Crawl và xem trực tiếp</a>
+  <p class="toolbar-note">Một lượt crawl Top Free Casual thu thập lần lượt {{ ios_collection_count }} thị trường: {{ ios_collection_label }}. Bộ lọc bên dưới chỉ đổi dữ liệu đang xem.</p>
+  <div class="page-toolbar data-filter-toolbar">
+    <div class="feed-switcher" role="group" aria-label="Loại bảng xếp hạng iOS">
+      <a href="/data?country={{ country }}&feed_type=top-free"
+         class="feed-option{% if feed_type == 'top-free' %} active{% endif %}"{% if feed_type == 'top-free' %} aria-current="page"{% endif %}>Top Free</a>
+      <a href="/data?country={{ country }}&feed_type=top-grossing"
+         class="feed-option{% if feed_type == 'top-grossing' %} active{% endif %}"{% if feed_type == 'top-grossing' %} aria-current="page"{% endif %}>Top Grossing</a>
     </div>
-    <form id="one-time-schedule-form" style="display: flex; gap: 0.5rem; margin-top: 0.8rem; align-items: end; flex-wrap: wrap;">
-      <div class="form-group" style="margin: 0;">
-        <label for="one-time-schedule-at" style="font-size: 0.875rem; color: var(--text-muted);">Ngày và giờ chạy</label>
-        <input id="one-time-schedule-at" name="scheduled_for" type="datetime-local" required>
-      </div>
-      <button type="submit" class="btn">Đặt lịch iOS</button>
-      <span id="one-time-schedule-status" role="status" style="font-size: 0.875rem; color: var(--text-muted);"></span>
-    </form>
-  </section>
-
-  <div style="display: flex; gap: 1rem; margin-top: 1.25rem; align-items: center; flex-wrap: wrap;">
-    <div class="form-group">
-      <label for="country_select" style="font-size: 0.875rem; color: var(--text-muted);">Thị trường:</label>
+    <div class="control-field">
+      <label for="country_select">Thị trường xem dữ liệu</label>
       <select id="country_select" onchange="location.href='/?country=' + this.value + '&feed_type={{ feed_type }}';">
+        {% if legacy_market %}<option value="{{ legacy_market.country }}" selected>{{ legacy_market.name }} · dữ liệu cũ ngoài nhóm</option>{% endif %}
         {% for m in markets %}
           <option value="{{ m.country }}" {% if m.country == country or (current_market and m.country == current_market.country) %}selected{% endif %}>
             {{ m.name }} ({{ m.country | upper }}) {% if m.source_status == 'unverified' %}[Unverified]{% endif %}
@@ -72,19 +49,40 @@
       </select>
     </div>
 
-    {% if snapshots %}
-      <div class="form-group">
-        <label for="snapshot_select" style="font-size: 0.875rem; color: var(--text-muted);">Bản chụp:</label>
+    <div class="control-field">
+      <label for="snapshot_select">Bản chụp đã lưu</label>
+      {% if snapshots %}
         <select id="snapshot_select" onchange="location.href='/?country={{ country }}&feed_type={{ feed_type }}&snapshot_id=' + this.value;">
           {% for s in snapshots %}
             <option value="{{ s.id }}" {% if selected_snapshot and selected_snapshot.id == s.id %}selected{% endif %}>
               {{ s.observed_at_vn }} ({{ s.quality }})
-            </option>
-          {% endfor %}
+          </option>
+        {% endfor %}
         </select>
-      </div>
-    {% endif %}
+      {% else %}
+        <span class="empty-control">Chưa có dữ liệu đã lưu</span>
+      {% endif %}
+    </div>
+    <p class="toolbar-note">Chọn dữ liệu đã thu thập trước đó</p>
   </div>
+
+  <section class="schedule-panel" aria-labelledby="one-time-schedule-heading">
+    <div class="schedule-panel-head">
+      <div>
+        <h2 id="one-time-schedule-heading">Lên lịch crawl</h2>
+        <p>Đặt lịch crawl iOS một lần · Top Free Casual · cùng {{ ios_collection_count }} thị trường ở trên · giờ Việt Nam (Asia/Ho_Chi_Minh)</p>
+      </div>
+      <a href="/android">Dữ liệu Android →</a>
+    </div>
+    <form id="one-time-schedule-form" class="page-toolbar schedule-form">
+      <div class="control-field">
+        <label for="one-time-schedule-at">Thời điểm chạy</label>
+        <input id="one-time-schedule-at" name="scheduled_for" type="datetime-local" required>
+      </div>
+      <button type="submit" class="btn btn-secondary">Đặt lịch một lần</button>
+      <span id="one-time-schedule-status" class="schedule-status" role="status"></span>
+    </form>
+  </section>
 
   {% if selected_snapshot %}
     <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-muted);">
@@ -136,7 +134,7 @@
             <th>Biến động & Xu hướng</th>
             <th>Cơ chế & Thể loại</th>
             <th>Mô hình Kiếm tiền</th>
-            <th>Độ phủ ASEAN+</th>
+            <th>Hiện diện trong BXH</th>
             <th>Đánh giá</th>
             <th>Thao tác</th>
           </tr>
@@ -202,22 +200,22 @@
               <td>
                 <div style="display: flex; flex-direction: column; gap: 0.25rem;">
                   <div>
-                    <span class="badge" style="font-size: 0.75rem; background: {% if e.monetization_model == 'HYBRID' %}#dbeafe; color: #1e40af;{% elif e.monetization_model == 'PURE_IAP' %}#fef3c7; color: #92400e;{% elif e.monetization_model == 'PAID_PREMIUM' %}#f3e8ff; color: #6b21a8;{% else %}#f1f5f9; color: #475569;{% endif %}">
+                    <span class="badge badge-model">
                       {{ e.monetization_model or 'PURE_ADS' }}
                     </span>
                   </div>
                   {% if feed_type == 'top-free' and e.grossing_rank %}
-                    <div style="font-size: 0.75rem; color: #d97706; font-weight: 600;">
+                    <div class="table-callout table-callout-warning">
                       💰 Grossing #{{ e.grossing_rank }}
                     </div>
                   {% elif feed_type == 'top-grossing' and e.free_rank %}
-                    <div style="font-size: 0.75rem; color: #2563eb; font-weight: 600;">
+                    <div class="table-callout table-callout-accent">
                       🆓 Free #{{ e.free_rank }}
                     </div>
                   {% endif %}
                   {% if e.monetization_efficiency_flag %}
                     <div>
-                      <span class="badge" style="font-size: 0.7rem; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0;">
+                      <span class="badge badge-efficiency">
                         {{ e.monetization_efficiency_flag }}
                       </span>
                     </div>
@@ -225,8 +223,8 @@
                 </div>
               </td>
               <td>
-                <span class="badge badge-cross-market" title="Thị trường: {{ (e.cross_markets or [country]) | join(', ') }}">
-                  🌐 {{ e.cross_market_count or 1 }} thị trường
+                <span class="badge badge-cross-market" title="BXH hoàn chỉnh cùng ngày UTC: {{ e.presence_markets | join(', ') | upper }}">
+                  {% if e.observed_market_count %}{{ e.presence_count }}/{{ e.observed_market_count }} thị trường đã quan sát{% else %}Chưa đủ dữ liệu{% endif %}
                 </span>
               </td>
               <td style="font-size: 0.875rem; color: var(--text-muted);">{{ e.rating_display }}</td>
@@ -266,7 +264,7 @@
 
     const renderSchedule = (schedule) => {
       if (schedule.status === "pending") {
-        status.textContent = `Đã lên lịch: ${schedule.scheduled_for_local} (iOS VN)`;
+        status.textContent = `Đã lên lịch: ${schedule.scheduled_for_local} (iOS · {{ ios_collection_count }} thị trường)`;
       } else if (schedule.status === "triggered") {
         status.textContent = "Đã bắt đầu crawl iOS.";
       } else if (schedule.status === "missed") {
