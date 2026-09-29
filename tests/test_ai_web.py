@@ -1,4 +1,5 @@
 from dataclasses import replace
+from time import monotonic, sleep
 
 import pytest
 from fastapi.testclient import TestClient
@@ -48,6 +49,17 @@ def confirm(client, quote, consent=True):
                        json={"quote": quote, "confirm_unknown": consent})
 
 
+def wait_terminal(client, run_id):
+    deadline = monotonic() + 5
+    while monotonic() < deadline:
+        response = client.get(f"/api/recommendations/{run_id}")
+        assert response.status_code == 200
+        if response.json()["status"] not in {"queued", "running"}:
+            return response
+        sleep(0.01)
+    pytest.fail("The offline fake evaluation did not finish within five seconds")
+
+
 def test_get_pages_and_status_never_call_provider(ai_client):
     client, provider, store, _ = ai_client
     assert client.get("/recommendations").status_code == 200
@@ -58,6 +70,7 @@ def test_get_pages_and_status_never_call_provider(ai_client):
     assert client.get("/recommendations").status_code == 200
     assert client.get(f"/recommendations/{run_id}").status_code == 200
     assert client.get(f"/api/recommendations/{run_id}").status_code == 200
+    wait_terminal(client, run_id)
     assert provider.calls == 1
     assert store.get(run_id)["status"] in {"succeeded", "partial"}
 
@@ -89,6 +102,7 @@ def test_confirmed_quote_is_one_call_and_replay_reuses_run(ai_client):
     second = confirm(client, ready["quote"])
     assert first.status_code == second.status_code == 202
     assert first.json() == second.json()
+    wait_terminal(client, first.json()["run_id"])
     assert len(store.list_runs()) == provider.calls == 1
     assert first.json()["url"] == "/recommendations/" + first.json()["run_id"]
 
@@ -148,7 +162,7 @@ def test_changed_preflight_requires_fresh_confirmation(ai_client, monkeypatch, c
 def test_public_status_whitelists_persisted_content(ai_client):
     client, _, store, _ = ai_client
     run_id = confirm(client, preflight(client).json()["quote"]).json()["run_id"]
-    response = client.get(f"/api/recommendations/{run_id}")
+    response = wait_terminal(client, run_id)
     assert response.status_code == 200
     body = response.json()
     assert body["id"] == run_id

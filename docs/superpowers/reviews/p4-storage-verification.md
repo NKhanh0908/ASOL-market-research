@@ -1,5 +1,9 @@
 # P4.1 storage verification — 2026-09-25
 
+**Historical report:** Storage was subsequently committed with the existing AI core.
+The provider, worker and UI integration described as pending below is now connected;
+see [2026-09-29 offline verification](p4-ui-verification.md) for current progress and limits.
+
 Implemented inline, preserving the existing dirty worktree. No commit/push, production
 database initialization, model generation request, or local API-key change was performed.
 

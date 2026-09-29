@@ -43,6 +43,7 @@ from casual_scout.web.security import (
     get_or_create_secret,
 )
 from casual_scout.web.views import (
+    format_vn_time,
     get_dashboard_view,
     get_data_view,
     get_game_view,
@@ -60,6 +61,7 @@ def create_app(
     launcher: Callable[[str, Path], int] = launch_pipeline,
     scheduler_factory: Callable[[Repository, Callable[[str, Path], int]], object] | None = None,
     android_launcher=launch_android,
+    *,
     ai_provider=None,
     ai_settings=None,
 ) -> FastAPI:
@@ -77,11 +79,15 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         jobs.recover_dead_processes()
+        worker.recover_orphans()
         scheduler.start()
         try:
             yield
         finally:
-            scheduler.stop()
+            try:
+                scheduler.stop()
+            finally:
+                worker.close()
 
     app = FastAPI(title="Casual Scout", lifespan=lifespan)
     app.state.repo = repo
@@ -119,11 +125,14 @@ def create_app(
     from casual_scout.ai.service import EvaluationEngine
     from casual_scout.ai.settings import AISettings
     from casual_scout.ai.storage import EvaluationStore
+    from casual_scout.ai.worker import EvaluationWorker
     from casual_scout.web.ai import ai_router
 
     engine = EvaluationEngine(repo, EvaluationStore(repo), ai_settings or AISettings(), ai_provider)
     app.state.ai_engine = engine
-    app.include_router(ai_router(engine, sec_mgr, templates))
+    worker = EvaluationWorker(engine, engine.store)
+    app.state.ai_worker = worker
+    app.include_router(ai_router(engine, sec_mgr, templates, worker))
 
     if static_dir.is_dir():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
@@ -273,14 +282,85 @@ def create_app(
     def run_status_endpoint(run_id: str):
         with closing(repo._connect()) as conn:
             row = conn.execute(
-                "SELECT id, status, ended_at FROM runs WHERE id = ?", (run_id,)
+                "SELECT id, status, started_at, ended_at FROM runs WHERE id = ?", (run_id,)
             ).fetchone()
             if row is None:
                 raise HTTPException(status_code=404, detail="Run not found")
+
+            mr_rows = conn.execute(
+                """
+                SELECT mr.*, c.country, c.platform, c.collection, m.name as market_name, s.id as snapshot_id, s.quality
+                FROM market_runs mr
+                JOIN charts c ON c.id = mr.chart_id
+                LEFT JOIN markets m ON m.country = c.country
+                LEFT JOIN snapshots s ON s.market_run_id = mr.id
+                WHERE mr.run_id = ?
+                ORDER BY c.country ASC, mr.id ASC
+                """,
+                (run_id,),
+            ).fetchall()
+
+        market_runs = []
+        total_markets = len(mr_rows)
+        completed_markets = 0
+        current_market = None
+
+        for r in mr_rows:
+            mr_d = dict(r)
+            chart_st = mr_d.get("chart_status") or "pending"
+            enrich_st = mr_d.get("enrichment_status") or "pending"
+            is_done = bool(mr_d.get("ended_at")) or (
+                chart_st in ("complete", "completed", "failed", "partial", "skipped")
+                and enrich_st in ("complete", "completed", "failed", "partial", "skipped")
+            )
+            is_running = (chart_st == "running" or enrich_st == "running") and not is_done
+
+            market_display = mr_d.get("market_name") or mr_d.get("country", "").upper()
+            if is_done:
+                completed_markets += 1
+            elif is_running and not current_market:
+                current_market = market_display
+
+            market_runs.append({
+                "country": mr_d.get("country", ""),
+                "country_name": market_display,
+                "platform": mr_d.get("platform", "ios"),
+                "collection": mr_d.get("collection", "top-free"),
+                "chart_status": chart_st,
+                "enrichment_status": enrich_st,
+                "valid_count": int(mr_d.get("valid_count") or 0),
+                "received_count": int(mr_d.get("received_count") or 0),
+                "error": mr_d.get("error") or "",
+                "ended_at_vn": format_vn_time(mr_d.get("ended_at")),
+                "snapshot_id": mr_d.get("snapshot_id"),
+                "is_done": is_done,
+                "is_running": is_running,
+            })
+
+        if not current_market and completed_markets < total_markets:
+            for m in market_runs:
+                if not m["is_done"]:
+                    current_market = m["country_name"]
+                    break
+
+        percent = int(completed_markets / total_markets * 100) if total_markets > 0 else 0
+        status_str = str(row["status"])
+        if status_str in ("succeeded", "completed", "partial"):
+            percent = 100
+            if completed_markets == 0 and total_markets > 0:
+                completed_markets = total_markets
+
         return {
             "id": str(row["id"]),
-            "status": str(row["status"]),
+            "status": status_str,
+            "started_at_vn": format_vn_time(str(row["started_at"])) if row["started_at"] else "—",
             "ended_at": str(row["ended_at"]) if row["ended_at"] else None,
+            "ended_at_vn": format_vn_time(str(row["ended_at"])) if row["ended_at"] else None,
+            "total_markets": total_markets,
+            "completed_markets": completed_markets,
+            "percent": percent,
+            "current_market": current_market or "",
+            "market_runs": market_runs,
         }
 
     @app.get("/api/charts/grossing")

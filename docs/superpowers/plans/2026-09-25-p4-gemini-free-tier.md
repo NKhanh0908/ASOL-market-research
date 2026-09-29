@@ -1,5 +1,14 @@
 # P4 Gemini Free Tier Adapter Implementation Plan
 
+**Current progress (2026-09-29):** Adapter, durable reservations, CLI startup configuration
+and manual UI guardrails are connected. See [P4 offline acceptance](../reviews/p4-ui-verification.md).
+Unchecked step recipes below preserve the original instructions; this summary tracks actual work.
+
+- [x] Task 1: Atomic, restart-safe five-attempt daily reservation.
+- [x] Task 2: Gemini adapter and explicit local configuration loading at CLI startup.
+- [x] Task 3: Manual consent, unknown billing, limits, history and failure states.
+- [ ] Task 3 live acceptance: Ten pilot outputs still require authorized calls and human review.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Enable manually confirmed Gemini pilot calls within the owner's approved Free Tier usage guardrail.

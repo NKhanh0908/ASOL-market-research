@@ -1,5 +1,9 @@
 # P4 provider decision — 2026-09-25
 
+**Integration update (2026-09-29):** CLI configuration loading, worker dispatch and manual
+Dashboard/history/detail UI are connected and tested offline. See [current verification](p4-ui-verification.md).
+No live call was made in this delivery. The ten-case acceptance table below remains Pending.
+
 The owner selected Gemini by supplying a replacement key in ignored local `.env`, then
 explicitly confirmed the account is Free Tier and authorized continued implementation.
 The key is never included in source, reports, prompts or database history.

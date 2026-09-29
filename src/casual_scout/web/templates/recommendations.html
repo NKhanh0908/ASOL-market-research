@@ -1,13 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Đánh giá AI{% endblock %}
+{% set active_tab = 'dashboard' %}
+{% block title %}Lịch sử gợi ý AI{% endblock %}
 {% block content %}
-<section class="card">
-  <h1 class="page-heading">Đánh giá AI đã lưu</h1>
-  <p>Kết quả cần được kiểm duyệt trước khi ra quyết định.</p>
-  {% for run in runs %}
-  <article><a href="/recommendations/{{ run.id }}">{{ run.analysis_date }} · {{ run.status }}</a>
-    {% if run.result %}<pre>{{ run.result | tojson(indent=2) }}</pre>{% endif %}
-  </article>
-  {% else %}<p>Chưa có lượt đánh giá.</p>{% endfor %}
-</section>
+<link rel="stylesheet" href="{{ static_asset('recommendations.css') }}">
+<div class="page-title-row"><div><h1 class="page-heading">Lịch sử gợi ý AI</h1><p class="page-lede">50 lượt gần nhất · Phạm vi và kết quả được lưu tại thời điểm đánh giá.</p></div><a class="btn btn-secondary" href="/dashboard">Về Dashboard</a></div>
+{% if runs %}
+<p><a href="/recommendations/{{ runs[0].id | urlencode }}">Xem lượt mới nhất</a></p>
+<div class="card data-table-card"><div class="table-responsive"><table class="ai-history">
+<thead><tr><th>Ngày phân tích</th><th>Thị trường</th><th>Provider / Model</th><th>Trạng thái</th><th>Chi phí thực tế (USD)</th><th>Thời điểm tạo (UTC)</th><th>Chi tiết</th></tr></thead>
+<tbody>{% for run in runs[:50] %}<tr><td>{{ run.analysis_date }}</td><td>{{ run.markets | join(', ') }}</td><td>{{ run.provider_id or 'Chưa cấu hình' }} / {{ run.model_id or 'Chưa cấu hình' }}</td><td><span class="badge badge-{{ run.status }}">{{ run.status }}</span></td><td>{{ run.actual_cost_usd if run.actual_cost_usd is not none else 'Chưa xác định' }}</td><td>{{ run.created_at }}</td><td><a href="/recommendations/{{ run.id | urlencode }}">Xem kết quả</a></td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% else %}<div class="card empty-state"><h2>Chưa có lượt gợi ý AI</h2><p>Tạo gợi ý từ Dashboard để xác nhận phạm vi và chi phí.</p></div>{% endif %}
 {% endblock %}

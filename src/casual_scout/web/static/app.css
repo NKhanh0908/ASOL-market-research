@@ -675,3 +675,113 @@ tbody tr:last-child td { border-bottom: 0; }
   color: #70747c;
   border: 1px solid #33363b;
 }
+
+/* Crawl Progress & Activity Indicators */
+.progress-card {
+  margin-bottom: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.progress-title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.progress-headline {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-ink);
+}
+
+.progress-percent {
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-cyan);
+}
+
+.progress-track {
+  width: 100%;
+  height: 10px;
+  background: var(--color-space);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-cyan));
+  border-radius: 999px;
+  transition: width 0.4s ease-in-out;
+}
+
+.progress-substatus {
+  margin-top: var(--space-2);
+  font-size: 0.875rem;
+  color: var(--color-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-muted);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.pulse-dot.active {
+  background: var(--color-cyan);
+  box-shadow: 0 0 0 0 rgba(113, 214, 186, 0.7);
+  animation: pulse-ring 1.8s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(113, 214, 186, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(113, 214, 186, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(113, 214, 186, 0);
+  }
+}
+
+.dashboard-active-run {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.dashboard-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  margin-bottom: var(--space-1);
+}
+

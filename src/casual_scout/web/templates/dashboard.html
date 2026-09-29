@@ -43,6 +43,45 @@
   </form>
 </div>
 
+{% if platform != 'android' %}
+<link rel="stylesheet" href="{{ static_asset('recommendations.css') }}">
+<section class="ai-dashboard-action" aria-label="Gợi ý AI cho dữ liệu iOS">
+  <div class="ai-actions">
+    <button type="button" id="ai-create" class="btn btn-secondary"
+            data-date="{{ selected_date }}" data-market="{{ selected_country }}"
+            data-csrf="{{ csrf_token }}"{% if mock_demo %} disabled{% endif %}>Tạo gợi ý AI</button>
+    <a href="/recommendations">Lịch sử gợi ý AI</a>
+  </div>
+  <p class="notice">Phạm vi theo ngày và thị trường đang chọn · chỉ chạy khi bạn xác nhận.</p>
+  {% if mock_demo %}<p class="ai-notice">Gợi ý AI bị tắt trong bản demo dữ liệu giả lập.</p>{% endif %}
+  <p id="ai-feedback" role="status" aria-live="polite"></p>
+</section>
+<dialog id="ai-confirm" class="ai-confirm-dialog" aria-labelledby="ai-confirm-title"
+        aria-describedby="ai-confirm-description">
+  <h2 id="ai-confirm-title">Xác nhận tạo gợi ý AI</h2>
+  <p id="ai-confirm-description">Dữ liệu thị trường công khai trong phạm vi này sẽ được gửi đến nhà cung cấp AI. Mỗi lượt mới là một lần gọi AI mới.</p>
+  <dl class="ai-quote-details">
+    <dt>Phạm vi iOS</dt><dd id="ai-scope"></dd>
+    <dt>Nhà cung cấp / mô hình</dt><dd id="ai-provider"></dd>
+    <dt>Giới hạn</dt><dd id="ai-limits"></dd>
+    <dt>Chế độ chi phí</dt><dd id="ai-cost"></dd>
+    <dt>Lượt thử còn lại hôm nay</dt><dd id="ai-attempts"></dd>
+  </dl>
+  <ul id="ai-coverage" class="ai-notice" aria-label="Cảnh báo độ phủ dữ liệu"></ul>
+  <p id="ai-warning" class="ai-notice" role="status" aria-live="polite"></p>
+  <label id="ai-unknown-label" class="ai-confirm-consent" hidden>
+    <input type="checkbox" id="ai-unknown">
+    <span>Tôi hiểu chi phí thực tế chưa xác định; đây là một lần gọi AI mới.</span>
+  </label>
+  <div class="ai-actions">
+    <button id="ai-submit" type="button" class="btn" disabled>Tạo gợi ý</button>
+    <button id="ai-cancel" type="button" class="btn btn-secondary" autofocus>Quay lại</button>
+    <a id="ai-inspect-history" href="/recommendations" hidden>Kiểm tra lịch sử gợi ý AI</a>
+  </div>
+</dialog>
+<script src="{{ static_asset('recommendations.js') }}" defer></script>
+{% endif %}
+
 <div class="dashboard-overview">
 <section class="card collection-panel" aria-labelledby="collection-panel-title">
   <div style="display: flex; justify-content: space-between; align-items: start; gap: 1rem; flex-wrap: wrap;">
@@ -54,9 +93,28 @@
       <input type="hidden" name="country" value="{{ ios_collection_scope }}">
       <input type="hidden" name="platform" value="{{ platform or 'ios' }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button type="submit" class="btn">Crawl ngay · {{ ios_collection_count }} thị trường</button>
+      <button type="submit" id="btn-crawl-now" class="btn"{% if collection_status.status in ['queued', 'running'] %} disabled title="Đang có lượt crawl đang thực thi"{% endif %}>Crawl ngay · {{ ios_collection_count }} thị trường</button>
     </form>
   </div>
+  {% if collection_status.status in ['queued', 'running'] and collection_status.run_id %}
+  <div class="dashboard-active-run" id="dashboard-active-run" data-run-id="{{ collection_status.run_id }}">
+    <div class="dashboard-progress-header">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span class="pulse-dot active"></span>
+        <strong id="dash-run-status-text">Đang thu thập dữ liệu...</strong>
+        <span id="dash-run-counts" style="color: var(--color-muted); font-size: 0.85rem;"></span>
+      </div>
+      <span id="dash-run-percent" class="progress-percent" style="font-size: 0.95rem;">0%</span>
+    </div>
+    <div class="progress-track" style="height: 8px; margin: 0.4rem 0;">
+      <div class="progress-fill" id="dash-run-bar" style="width: 0%;"></div>
+    </div>
+    <div style="display: flex; justify-content: space-between; font-size: 0.825rem; color: var(--color-muted);">
+      <span id="dash-run-current">Đang chuẩn bị các thị trường...</span>
+      <a href="/runs/{{ collection_status.run_id }}" style="color: var(--color-violet); text-decoration: none;">Xem chi tiết lượt cào ↗</a>
+    </div>
+  </div>
+  {% endif %}
   <div class="collection-meta">
     <span>Trạng thái gần nhất: <strong>{{ collection_status.status }}</strong> · {{ collection_status.started_at_vn }}{% if collection_status.run_id %} · {{ collection_status.valid_count }} game hợp lệ · <a href="/runs/{{ collection_status.run_id }}">Xem chi tiết</a>{% endif %}</span>
     <label class="schedule-toggle">
@@ -427,5 +485,62 @@ async function submitBookmark(e) {
     alert('Lỗi lưu shortlist!');
   }
 }
+
+(function() {
+  const activeRunBox = document.getElementById("dashboard-active-run");
+  if (!activeRunBox) return;
+
+  const runId = activeRunBox.getAttribute("data-run-id");
+  if (!runId) return;
+
+  const bar = document.getElementById("dash-run-bar");
+  const percentText = document.getElementById("dash-run-percent");
+  const countsText = document.getElementById("dash-run-counts");
+  const currentText = document.getElementById("dash-run-current");
+  const btnCrawl = document.getElementById("btn-crawl-now");
+
+  const pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`/runs/${runId}/status`);
+      if (res.ok) {
+        const data = await res.json();
+        const percentVal = typeof data.percent === 'number' ? data.percent : (data.status === 'succeeded' || data.status === 'partial' || data.status === 'complete' ? 100 : 0);
+        const completedVal = typeof data.completed_markets === 'number' ? data.completed_markets : 0;
+        const totalVal = typeof data.total_markets === 'number' ? data.total_markets : (Array.isArray(data.market_runs) ? data.market_runs.length : 0);
+
+        if (bar) bar.style.width = `${percentVal}%`;
+        if (percentText) percentText.textContent = `${percentVal}%`;
+        if (countsText && totalVal > 0) {
+          countsText.textContent = `(${completedVal}/${totalVal} thị trường)`;
+        }
+        if (currentText && data.current_market) {
+          currentText.textContent = `Đang cào: ${data.current_market}...`;
+        }
+
+        if (data.status !== "queued" && data.status !== "running") {
+          clearInterval(pollTimer);
+          if (data.status === "succeeded" || data.status === "complete" || data.status === "partial") {
+            if (bar) bar.style.width = "100%";
+            if (percentText) percentText.textContent = "100%";
+            const msg = data.status === "partial" ? "✓ Thu thập hoàn tất một phần!" : "✓ Thu thập hoàn tất!";
+            if (currentText) currentText.innerHTML = `<span style="color: var(--color-success);">${msg} <a href="javascript:location.reload()" style="color: var(--color-cyan); text-decoration: underline;">Làm mới trang</a> để xem dữ liệu mới.</span>`;
+            if (btnCrawl) {
+              btnCrawl.disabled = false;
+              btnCrawl.removeAttribute("title");
+            }
+          } else {
+            if (currentText) currentText.textContent = `Thu thập kết thúc (${data.status}).`;
+            if (btnCrawl) {
+              btnCrawl.disabled = false;
+              btnCrawl.removeAttribute("title");
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Dashboard poll error:", e);
+    }
+  }, 2500);
+})();
 </script>
 {% endblock %}

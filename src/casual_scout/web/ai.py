@@ -1,15 +1,17 @@
 """Explicit, signed and session-bound web dispatch for existing AI evaluations."""
 
+from contextlib import closing
 from dataclasses import asdict, replace
 from datetime import date
 from hashlib import sha256
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from itsdangerous import BadSignature, URLSafeTimedSerializer
 from pydantic import BaseModel
 
 from casual_scout.ai.contracts import canonical_json
 from casual_scout.ai.service import ConfirmationRequired
+from casual_scout.ai.storage import EvaluationBusy
 from casual_scout.config import IOS_COLLECTION_COUNTRIES
 
 
@@ -29,7 +31,20 @@ def _fingerprint(prepared):
     return sha256(canonical_json(value).encode()).hexdigest()
 
 
-def ai_router(engine, security, templates):
+def public_run(run: dict) -> dict:
+    """Expose persisted review data without provider input or private configuration."""
+    result = {key: run.get(key) for key in (
+        "id", "status", "analysis_date", "markets", "provider_id", "model_id",
+        "result", "usage", "error_category", "safe_error", "created_at", "started_at",
+        "ended_at", "actual_cost_usd", "cost_method",
+    )}
+    result["scope"] = {"analysis_date": run.get("analysis_date"), "markets": run.get("markets")}
+    result["manifest"] = run.get("input", {}).get("manifest", {})
+    result["warnings"] = run.get("policy", {}).get("warnings", [])
+    return result
+
+
+def ai_router(engine, security, templates, worker):
     router = APIRouter()
     signer = URLSafeTimedSerializer(security.serializer.secret_key, salt="ai-preflight")
 
@@ -41,26 +56,13 @@ def ai_router(engine, security, templates):
             raise HTTPException(403, "Mock demo is read-only")
         return session
 
-    def public(run):
-        result = {
-            key: run.get(key)
-            for key in (
-                "id",
-                "status",
-                "analysis_date",
-                "markets",
-                "provider_id",
-                "model_id",
-                "result",
-                "usage",
-                "error_category",
-                "created_at",
-                "updated_at",
-            )
-        }
-        result["manifest"] = run.get("input", {}).get("manifest", {})
-        result["warnings"] = run.get("input", {}).get("warnings", [])
-        return result
+    def find_existing_request(key):
+        with closing(engine.repo._connect()) as db:
+            row = db.execute("SELECT id FROM ai_evaluation_runs WHERE request_key=?", (key,)).fetchone()
+        return engine.store.get(row["id"]) if row else None
+
+    def run_response(run):
+        return {"run_id": run["id"], "url": "/recommendations/" + run["id"]}
 
     def get_run(run_id):
         try:
@@ -75,8 +77,8 @@ def ai_router(engine, security, templates):
             name="recommendations.html",
             context={
                 "request": request,
-                "active_tab": "recommendations",
-                "runs": [public(r) for r in engine.store.list_runs()],
+                "active_tab": "dashboard",
+                "runs": [public_run(r) for r in engine.store.list_runs(limit=50)],
             },
         )
 
@@ -84,17 +86,17 @@ def ai_router(engine, security, templates):
     def detail_page(request: Request, run_id: str):
         return templates.TemplateResponse(
             request=request,
-            name="recommendations.html",
+            name="recommendation_run.html",
             context={
                 "request": request,
-                "active_tab": "recommendations",
-                "runs": [public(get_run(run_id))],
+                "active_tab": "dashboard",
+                "run": public_run(get_run(run_id)),
             },
         )
 
     @router.get("/api/recommendations/{run_id}")
     def status(run_id: str):
-        return public(get_run(run_id))
+        return public_run(get_run(run_id))
 
     @router.post("/api/recommendations/preflight")
     def preflight(request: Request, scope: ScopeRequest):
@@ -108,13 +110,17 @@ def ai_router(engine, security, templates):
                 if scope.market == "all"
                 else tuple(scope.market.split(","))
             )
-            if not 1 <= len(markets) <= 9 or not set(markets) <= set(IOS_COLLECTION_COUNTRIES):
+            if (not 1 <= len(markets) <= 12 or len(set(markets)) != len(markets)
+                    or not set(markets) <= set(IOS_COLLECTION_COUNTRIES)):
                 raise ValueError()
         except ValueError:
             raise HTTPException(422, "Invalid analysis scope") from None
         prepared = engine.prepare(scope.analysis_date, markets)
         if prepared.blocked_reason:
-            run = engine.submit(prepared)
+            try:
+                run = engine.submit(prepared)
+            except EvaluationBusy:
+                raise HTTPException(409, "Another evaluation is active") from None
             return {"state": "blocked", "run_id": run["id"], "reason": prepared.blocked_reason}
         quote = signer.dumps(
             {
@@ -133,10 +139,21 @@ def ai_router(engine, security, templates):
             "model_id": prepared.request.model_id,
             "requires_unknown_confirmation": prepared.requires_unknown_confirmation,
             "attempts_remaining": prepared.request.policy.get("attempts_remaining"),
+            "estimated_cost_usd": prepared.estimated_cost_usd,
+            **{key: prepared.request.policy.get(key) for key in (
+                "max_cost_per_run_usd", "max_output_tokens", "timeout_seconds", "cost_mode",
+                "free_tier_confirmed", "max_runs_per_day", "monetary_upper_bound_guaranteed",
+                "manual_confirmation_required",
+            )},
+            "warnings": list(prepared.request.policy.get("warnings", [])) + (
+                ["Free Tier is owner-confirmed; the application cannot verify billing tier or guarantee zero cost.",
+                 "Pilot recommendations still require human quality review."]
+                if prepared.request.policy.get("cost_mode") == "free_tier" else []
+            ),
         }
 
     @router.post("/api/recommendations/runs", status_code=202)
-    def confirm(request: Request, body: ConfirmRequest, background: BackgroundTasks):
+    def confirm(request: Request, body: ConfirmRequest):
         session = authorized(request)
         try:
             quote = signer.loads(body.quote, max_age=300)
@@ -144,22 +161,21 @@ def ai_router(engine, security, templates):
                 raise BadSignature("wrong session")
         except (BadSignature, KeyError):
             raise HTTPException(403, "Invalid or expired preflight") from None
+        existing = find_existing_request(quote["key"])
+        if existing is not None:
+            return run_response(existing)
         prepared = engine.prepare(quote["day"], tuple(quote["markets"]))
         if _fingerprint(prepared) != quote["fingerprint"]:
-            # A successful replay changes quota remaining, but must reuse the existing request.
-            existing = next(
-                (r for r in engine.store.list_runs() if r["request_key"] == quote["key"]), None
-            )
-            if existing:
-                return {"run_id": existing["id"], "url": "/recommendations/" + existing["id"]}
             raise HTTPException(409, "Preflight changed; confirm a fresh quote")
         prepared = replace(prepared, request=replace(prepared.request, request_key=quote["key"]))
         try:
             run = engine.submit(prepared, confirm_unknown=body.confirm_unknown)
         except ConfirmationRequired as error:
             raise HTTPException(422, str(error)) from None
+        except EvaluationBusy:
+            raise HTTPException(409, "Another evaluation is active") from None
         if run["status"] == "queued":
-            background.add_task(engine.run, run["id"])
-        return {"run_id": run["id"], "url": "/recommendations/" + run["id"]}
+            worker.submit(run["id"])
+        return run_response(run)
 
     return router

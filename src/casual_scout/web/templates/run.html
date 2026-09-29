@@ -24,6 +24,52 @@
     <div>Bắt đầu: <strong style="color: var(--text);">{{ run.started_at_vn }}</strong></div>
     <div>Kết thúc: <strong style="color: var(--text);" id="run-ended-at">{{ run.ended_at_vn or "Đang tiến hành..." }}</strong></div>
   </div>
+
+  <div class="progress-card" id="run-progress-container" style="margin-top: 1rem; margin-bottom: 0;">
+    <div class="progress-header">
+      <div class="progress-title-group">
+        <span class="pulse-dot {% if run.status in ['queued', 'running'] %}active{% endif %}" id="progress-pulse"></span>
+        <span class="progress-headline" id="progress-headline">
+          {% if run.status in ['queued', 'running'] %}
+            Đang thu thập dữ liệu... (<span id="progress-counts">--</span>)
+          {% elif run.status in ['succeeded', 'complete'] %}
+            Thu thập dữ liệu hoàn tất
+          {% elif run.status == 'partial' %}
+            Thu thập hoàn tất một phần
+          {% else %}
+            Trạng thái: {{ run.status }}
+          {% endif %}
+        </span>
+      </div>
+      <span class="progress-percent" id="progress-percent-label">
+        {% if run.status in ['succeeded', 'complete', 'partial'] %}100%{% else %}0%{% endif %}
+      </span>
+    </div>
+
+    <div class="progress-track" role="progressbar" aria-valuenow="{% if run.status in ['succeeded', 'complete', 'partial'] %}100{% else %}0{% endif %}" aria-valuemin="0" aria-valuemax="100">
+      <div class="progress-fill" id="progress-fill-bar" style="width: {% if run.status in ['succeeded', 'complete', 'partial'] %}100%{% else %}0%{% endif %};"></div>
+    </div>
+
+    <div class="progress-substatus" id="progress-substatus">
+      <span id="current-action-text">
+        {% if run.status in ['queued', 'running'] %}
+          Đang chuẩn bị các thị trường...
+        {% elif run.status in ['succeeded', 'complete'] %}
+          <span style="color: var(--color-success);">Tất cả thị trường đã hoàn tất và sẵn sàng phân tích.</span>
+        {% elif run.status == 'partial' %}
+          <span style="color: var(--color-warning);">Thu thập hoàn tất một phần (toàn bộ bảng xếp hạng đã lưu, một số metadata không có sẵn).</span>
+        {% else %}
+          <span>Lượt cào đã kết thúc.</span>
+        {% endif %}
+      </span>
+      <div id="progress-actions">
+        {% if run.status in ['succeeded', 'complete', 'partial'] %}
+          <a href="/dashboard" class="btn btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">Về Dashboard</a>
+          <a href="/data" class="btn" style="padding: 0.2rem 0.6rem; font-size: 0.8rem; margin-left: 0.5rem;">Xem dữ liệu cào ↗</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="card data-table-card">
@@ -43,14 +89,14 @@
       </thead>
       <tbody>
         {% for mr in market_runs or run.market_runs %}
-          <tr>
-            <td><strong>{{ mr.market_name or mr.country_name }}</strong> ({{ mr.country | upper }} - {{ mr.country }})</td>
-            <td><span class="badge badge-{{ mr.chart_status }}">{{ mr.chart_status }}</span></td>
-            <td><span class="badge badge-{{ mr.enrichment_status }}">{{ mr.enrichment_status }}</span></td>
-            <td>{{ mr.valid_count }} / {{ mr.received_count }}</td>
-            <td style="color: var(--danger); font-size: 0.85rem;">{{ mr.error or "—" }}</td>
-            <td style="color: var(--text-muted); font-size: 0.85rem;">{{ mr.ended_at_vn or "—" }}</td>
-            <td>
+          <tr id="mr-row-{{ mr.country }}-{{ mr.collection or 'top-free' }}">
+            <td class="mr-name"><strong>{{ mr.market_name or mr.country_name }}</strong> ({{ mr.country | upper }} - {{ mr.country }})</td>
+            <td class="mr-chart"><span class="badge badge-{{ mr.chart_status }}">{{ mr.chart_status }}</span></td>
+            <td class="mr-enrich"><span class="badge badge-{{ mr.enrichment_status }}">{{ mr.enrichment_status }}</span></td>
+            <td class="mr-count">{{ mr.valid_count }} / {{ mr.received_count }}</td>
+            <td class="mr-error" style="color: var(--danger); font-size: 0.85rem;">{{ mr.error or "—" }}</td>
+            <td class="mr-ended" style="color: var(--text-muted); font-size: 0.85rem;">{{ mr.ended_at_vn or "—" }}</td>
+            <td class="mr-snapshot">
               {% if mr.snapshot_id %}
                 <a href="/data?country={{ mr.country }}&platform={{ mr.platform }}&feed_type={% if 'grossing' in mr.collection %}top-grossing{% else %}top-free{% endif %}&snapshot_id={{ mr.snapshot_id }}" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">
                   Xem Data ↗
@@ -67,19 +113,103 @@
 </div>
 
 <script>
-  // Poll status every 2 seconds if run is active
   const runId = "{{ run.id }}";
   let currentStatus = "{{ run.status }}";
 
+  function updateRow(mr) {
+    const coll = mr.collection || 'top-free';
+    const row = document.getElementById(`mr-row-${mr.country}-${coll}`);
+    if (!row) return;
+
+    const chartCell = row.querySelector('.mr-chart');
+    if (chartCell) {
+      chartCell.innerHTML = `<span class="badge badge-${mr.chart_status}">${mr.chart_status}</span>`;
+    }
+    const enrichCell = row.querySelector('.mr-enrich');
+    if (enrichCell) {
+      enrichCell.innerHTML = `<span class="badge badge-${mr.enrichment_status}">${mr.enrichment_status}</span>`;
+    }
+    const countCell = row.querySelector('.mr-count');
+    if (countCell) {
+      countCell.textContent = `${mr.valid_count} / ${mr.received_count}`;
+    }
+    const errorCell = row.querySelector('.mr-error');
+    if (errorCell) {
+      errorCell.textContent = mr.error || "—";
+    }
+    const endedCell = row.querySelector('.mr-ended');
+    if (endedCell) {
+      endedCell.textContent = mr.ended_at_vn || "—";
+    }
+    const snapCell = row.querySelector('.mr-snapshot');
+    if (snapCell && mr.snapshot_id) {
+      const feedType = coll.includes('grossing') ? 'top-grossing' : 'top-free';
+      snapCell.innerHTML = `<a href="/data?country=${mr.country}&platform=${mr.platform}&feed_type=${feedType}&snapshot_id=${mr.snapshot_id}" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Xem Data ↗</a>`;
+    }
+  }
+
   if (currentStatus === "queued" || currentStatus === "running") {
+    const fillBar = document.getElementById("progress-fill-bar");
+    const percentLabel = document.getElementById("progress-percent-label");
+    const countsLabel = document.getElementById("progress-counts");
+    const actionText = document.getElementById("current-action-text");
+    const statusBadge = document.getElementById("run-status-badge");
+    const endedAtLabel = document.getElementById("run-ended-at");
+    const pulseDot = document.getElementById("progress-pulse");
+    const actionsDiv = document.getElementById("progress-actions");
+
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/runs/${runId}/status`);
         if (res.ok) {
           const data = await res.json();
+          
+          const percentVal = typeof data.percent === 'number' ? data.percent : (data.status === 'succeeded' || data.status === 'partial' || data.status === 'complete' ? 100 : 0);
+          const completedVal = typeof data.completed_markets === 'number' ? data.completed_markets : 0;
+          const totalVal = typeof data.total_markets === 'number' ? data.total_markets : (Array.isArray(data.market_runs) ? data.market_runs.length : 0);
+
+          if (fillBar) fillBar.style.width = `${percentVal}%`;
+          if (percentLabel) percentLabel.textContent = `${percentVal}%`;
+          if (countsLabel && totalVal > 0) {
+            countsLabel.textContent = `${completedVal}/${totalVal} thị trường`;
+          }
+          
+          if (actionText && data.current_market) {
+            actionText.innerHTML = `Đang xử lý thị trường: <strong>${data.current_market}</strong>...`;
+          }
+
+          if (Array.isArray(data.market_runs)) {
+            data.market_runs.forEach(updateRow);
+          }
+
+          if (statusBadge && data.status) {
+            statusBadge.className = `badge badge-${data.status}`;
+            statusBadge.textContent = data.status;
+          }
+
           if (data.status !== "queued" && data.status !== "running") {
             clearInterval(interval);
-            location.reload();
+            if (pulseDot) pulseDot.classList.remove("active");
+            if (endedAtLabel && data.ended_at_vn) {
+              endedAtLabel.textContent = data.ended_at_vn;
+            }
+            if (data.status === "succeeded" || data.status === "complete") {
+              if (fillBar) fillBar.style.width = "100%";
+              if (percentLabel) percentLabel.textContent = "100%";
+              if (actionText) actionText.innerHTML = '<span style="color: var(--color-success); font-weight: 500;">✓ Thu thập hoàn tất toàn bộ thị trường!</span>';
+              if (actionsDiv) {
+                actionsDiv.innerHTML = '<a href="/dashboard" class="btn btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">Về Dashboard</a> <a href="/data" class="btn" style="padding: 0.2rem 0.6rem; font-size: 0.8rem; margin-left: 0.5rem;">Xem dữ liệu cào ↗</a>';
+              }
+            } else if (data.status === "partial") {
+              if (fillBar) fillBar.style.width = "100%";
+              if (percentLabel) percentLabel.textContent = "100%";
+              if (actionText) actionText.innerHTML = '<span style="color: var(--color-warning); font-weight: 500;">✓ Thu thập hoàn tất một phần (toàn bộ bảng xếp hạng đã lưu, một số metadata không có sẵn).</span>';
+              if (actionsDiv) {
+                actionsDiv.innerHTML = '<a href="/dashboard" class="btn btn-secondary" style="padding: 0.2rem 0.6rem; font-size: 0.8rem;">Về Dashboard</a> <a href="/data" class="btn" style="padding: 0.2rem 0.6rem; font-size: 0.8rem; margin-left: 0.5rem;">Xem dữ liệu cào ↗</a>';
+              }
+            } else {
+              if (actionText) actionText.innerHTML = `<span style="color: var(--color-danger);">Quá trình thu thập kết thúc với trạng thái: ${data.status}</span>`;
+            }
           }
         }
       } catch (err) {

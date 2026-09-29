@@ -183,7 +183,53 @@ def test_runs_list_and_detail(web_setup):
 
     status_res = client.get(f"/runs/{run_id}/status")
     assert status_res.status_code == 200
-    assert status_res.json()["status"] == "queued"
+    status_json = status_res.json()
+    assert status_json["status"] == "queued"
+    assert status_json["total_markets"] == 1
+    assert status_json["completed_markets"] == 0
+    assert status_json["percent"] == 0
+    assert "market_runs" in status_json
+    assert len(status_json["market_runs"]) == 1
+    assert status_json["market_runs"][0]["country"] == "vn"
+
+    assert 'id="run-progress-container"' in run_res.text
+    assert 'id="progress-fill-bar"' in run_res.text
+    assert 'id="progress-headline"' in run_res.text
+
+
+def test_dashboard_shows_active_run_progress_banner(web_setup):
+    repo, client, _launcher, _calls = web_setup
+    from casual_scout.collection.jobs import JobService
+
+    jobs = JobService(repo)
+    run_id = jobs.submit("manual", ["vn", "th"], "req-active-dash")
+
+    dashboard_res = client.get("/dashboard")
+    assert dashboard_res.status_code == 200
+    assert 'id="dashboard-active-run"' in dashboard_res.text
+    assert f'data-run-id="{run_id}"' in dashboard_res.text
+    assert 'id="dash-run-bar"' in dashboard_res.text
+    assert 'disabled title="Đang có lượt crawl đang thực thi"' in dashboard_res.text
+
+
+def test_run_status_succeeded_and_partial_completion(web_setup):
+    repo, client, _launcher, _calls = web_setup
+    from casual_scout.collection.jobs import JobService
+
+    jobs = JobService(repo)
+    run_id = jobs.submit("manual", ["vn"], "req-test-partial")
+    with repo._write_connection() as conn:
+        conn.execute("UPDATE runs SET status='partial', ended_at='2026-09-29T12:00:00Z' WHERE id=?", (run_id,))
+        conn.execute("UPDATE market_runs SET chart_status='complete', enrichment_status='partial', ended_at='2026-09-29T12:00:00Z' WHERE run_id=?", (run_id,))
+
+    status_res = client.get(f"/runs/{run_id}/status")
+    assert status_res.status_code == 200
+    data = status_res.json()
+    assert data["status"] == "partial"
+    assert data["percent"] == 100
+    assert data["completed_markets"] == 1
+    assert data["total_markets"] == 1
+    assert data["market_runs"][0]["is_done"] is True
 
 
 def test_game_detail_escapes_script_tags(web_setup, evidence_dir: Path):
@@ -278,7 +324,9 @@ def test_pages_load_content_versioned_static_assets(web_setup, page):
     _repo, client, _launcher, _calls = web_setup
     html = client.get(page).text
     asset_urls = re.findall(r'(?:href|src)="(/static/[^" ]+)"', html)
-    assert len(asset_urls) == 1
+    expected_assets = {"app.css", "recommendations.css", "recommendations.js"} if page == "/dashboard" else {"app.css"}
+    assert {url.split("?")[0].removeprefix("/static/") for url in asset_urls} == expected_assets
+    assert len(asset_urls) == len(expected_assets)
     for url in asset_urls:
         asset = client.get(url)
         assert asset.status_code == 200

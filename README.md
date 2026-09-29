@@ -366,6 +366,18 @@ shortlist notes or local files. The application cannot verify your account's bil
 or guarantee zero charges. Token usage is not an invoice, so actual cost remains unknown.
 AI recommendations are a pilot result requiring human quality review before decisions.
 
+Start the web server with `python -m casual_scout.cli serve` so the CLI explicitly loads
+this configuration. On the iOS Dashboard, choose the analysis date/market and click
+**Tạo gợi ý AI**. Inspect the preflight scope and limits, check the consent box, then
+confirm. Opening or cancelling this dialog does not dispatch a model call. Review saved
+runs at `/recommendations`; queued/running detail pages poll status with GET only.
+If submission loses its connection, inspect history before creating another run.
+Direct `create_app(...)` remains disabled unless AI settings/provider are explicitly injected.
+
+Offline verification: [P4 acceptance and remaining gates](docs/superpowers/reviews/p4-ui-verification.md).
+Client behavior tests run with `node --test tests/js/test_ai_clients.cjs`; the Python
+suite also executes the detail polling tests using Node. No live Gemini call is needed.
+
 ## Bản quyền
 
 Phát triển cho mục đích nghiên cứu và phân tích thị trường casual games tại ASOL. Chưa có tệp giấy phép trong repository; cần xác nhận điều khoản trước khi phân phối ra ngoài.

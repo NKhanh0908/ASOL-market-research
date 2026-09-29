@@ -1,8 +1,18 @@
 # P4.1 AI Evaluation Storage Implementation Plan
 
+**Current progress (2026-09-29):** Tasks 1–3 are implemented in code. See
+[P4 offline acceptance](../reviews/p4-ui-verification.md) for the current verification.
+The 2026-09-25 report below is historical. Unchecked step recipes below preserve the
+original instructions; this dated task summary tracks actual progress.
+
+- [x] Task 1: Packaged schema and reproducible request contracts.
+- [x] Task 2: Atomic lifecycle, immutable history and idempotency.
+- [x] Task 3: Backup/restore and regression coverage.
+
 **Execution status (2026-09-25):** Tasks 1–3 implemented and independently reviewed inline.
 See [verification report](../reviews/p4-storage-verification.md). No commit/push or production
-database migration was performed. Subsequent engine/UI/provider plans remain pending.
+database migration was performed during that storage session. Engine/UI/provider progress
+has since advanced; see the dated summary above.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

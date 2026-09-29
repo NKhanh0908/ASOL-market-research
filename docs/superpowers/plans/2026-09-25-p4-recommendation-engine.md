@@ -1,5 +1,17 @@
 # P4.2 Evidence-Based Recommendation Engine Implementation Plan
 
+**Current progress (2026-09-29):** The engine and worker are implemented and connected
+to explicit web dispatch. See [P4 offline acceptance](../reviews/p4-ui-verification.md).
+Unchecked step recipes below preserve the original instructions; this summary tracks actual work.
+
+- [x] Task 1: Bounded evidence and frozen source manifest.
+- [x] Task 2: Strict output schema, prompt and qualitative rubric.
+- [x] Task 3: Explicit preflight and one-call lifecycle.
+- [x] Task 4: Worker dispatch, orphan recovery and readable persisted runs.
+- [x] Task 5: Provider decision and ten offline pilot scenarios prepared.
+- [ ] Task 5 live acceptance: Ten authorized outputs need human quality review; see
+  [provider decision](../reviews/p4-provider-decision.md). Fake tests do not close this gate.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a manually triggered, bounded, evidence-led AI pipeline that produces at most three qualitative recommendations and can be completely tested offline.
