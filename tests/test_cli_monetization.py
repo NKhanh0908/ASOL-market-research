@@ -50,7 +50,7 @@ def test_cli_collect_passes_chart_type(tmp_path: Path, monkeypatch):
     repo.initialize()
 
     with patch('casual_scout.collection.jobs.JobService.submit') as mock_submit, \
-         patch('casual_scout.collection.service.Collector.execute') as mock_execute:
+         patch('casual_scout.collection.platforms.execute_run') as mock_execute:
         mock_submit.return_value = 'fake-run-id'
         mock_execute.return_value = 'succeeded'
 

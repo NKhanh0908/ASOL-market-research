@@ -10,3 +10,6 @@ __pycache__/
 .pytest_tmp*/
 .pytest-*/
 .hallmark/
+.coverage*
+htmlcov/
+.tmp-runtime*/

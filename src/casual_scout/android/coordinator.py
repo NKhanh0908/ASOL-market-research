@@ -1,40 +1,32 @@
 from __future__ import annotations
 
 import logging
-import subprocess
-import sys
 from contextlib import closing
 from datetime import UTC, datetime
 
 import psutil
 
 from casual_scout.android.storage import AndroidStore
-from casual_scout.collection.jobs import _is_process_alive
+from casual_scout.collection.jobs import JobService, _is_process_alive
 from casual_scout.operations.daily_scheduler import DailyScheduler
 
 LOG = logging.getLogger(__name__)
 
 
 def launch_android(job_id, data_dir):
-    logs = data_dir.resolve() / "logs"
-    logs.mkdir(parents=True, exist_ok=True)
-    with (logs / f"android-{job_id}.log").open("a", encoding="utf-8") as log:
-        process = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "casual_scout.android.worker",
-                "--run-id",
-                job_id,
-                "--data-dir",
-                str(data_dir.resolve()),
-            ],
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            shell=False,
-            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-        )
-    return process.pid
+    """Compatibility launcher for new core Android runs; archives remain read-only."""
+    from casual_scout.collection.processes import launch_pipeline
+    from casual_scout.storage import Repository
+
+    repo = Repository(data_dir)
+    with closing(repo._connect()) as db:
+        rows = db.execute(
+            "SELECT DISTINCT c.platform FROM market_runs m JOIN charts c ON c.id=m.chart_id WHERE m.run_id=?",
+            (job_id,),
+        ).fetchall()
+    if len(rows) != 1 or rows[0]["platform"] != "android":
+        raise ValueError("Archived Android jobs are read-only")
+    return launch_pipeline(job_id, data_dir)
 
 
 def dispatch_pending(store, launcher=launch_android):
@@ -79,14 +71,21 @@ class AndroidCoordinator(DailyScheduler):
         self.android_launcher = android_launcher
 
     def check_once(self):
+        JobService(self.repository).recover_dead_processes()
         recover_android(self.store)
         try:
             result = super().check_once()
         except Exception:
             LOG.exception("iOS scheduler tick failed")
             result = "ios_error"
-        self.store.enqueue_daily(self.now())
-        dispatch_pending(self.store, self.android_launcher)
+        now = self.now()
+        from zoneinfo import ZoneInfo
+
+        local_date = now.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()
+        jobs = JobService(self.repository)
+        run_id = jobs.submit_scheduled_android(local_date, now)
+        if run_id:
+            jobs.launch(run_id, self.android_launcher)
         return result
 
     def _run(self):

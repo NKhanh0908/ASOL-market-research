@@ -52,7 +52,7 @@
             <td style="color: var(--text-muted); font-size: 0.85rem;">{{ mr.ended_at_vn or "—" }}</td>
             <td>
               {% if mr.snapshot_id %}
-                <a href="/?country={{ mr.country }}&snapshot_id={{ mr.snapshot_id }}" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">
+                <a href="/data?country={{ mr.country }}&platform={{ mr.platform }}&feed_type={% if 'grossing' in mr.collection %}top-grossing{% else %}top-free{% endif %}&snapshot_id={{ mr.snapshot_id }}" class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">
                   Xem Data ↗
                 </a>
               {% else %}

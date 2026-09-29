@@ -1,7 +1,8 @@
 """Presentation helpers for multi-platform web UI and badge rendering."""
+
 from __future__ import annotations
 
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 
 def installs_badge(min_installs: int | None) -> tuple[str, str]:
@@ -34,10 +35,17 @@ def platform_url(path: str, query: dict, platform: str) -> str:
     return f"{path}?{encoded}" if encoded else path
 
 
-def app_store_url(store_url: str | None, app_id: str, platform: str = "ios", country: str = "vn") -> str:
+def app_store_url(
+    store_url: str | None, app_id: str, platform: str = "ios", country: str = "vn"
+) -> str:
     """Return valid store URL for iOS or Android."""
     if store_url:
-        return store_url
+        parsed = urlparse(store_url)
+        expected_host = "play.google.com" if platform == "android" else "apps.apple.com"
+        if parsed.scheme == "https" and parsed.hostname == expected_host:
+            return store_url
     if platform == "android":
-        return f"https://play.google.com/store/apps/details?id={app_id}&hl=en&gl={country}"
+        return "https://play.google.com/store/apps/details?" + urlencode(
+            {"id": app_id, "hl": "en", "gl": country.upper()}
+        )
     return f"https://apps.apple.com/{country}/app/id{app_id}"

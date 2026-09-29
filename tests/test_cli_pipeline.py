@@ -24,7 +24,7 @@ def test_pipeline_analyzes_all_successful_markets_after_a_partial_collection(
         return replace(reply, started_at=datetime(2026, 9, day, 23, 59, tzinfo=UTC)), parsed
 
     monkeypatch.setattr(provider, 'fetch_chart', fetch_on_historical_days)
-    monkeypatch.setattr(cli, 'AppleProvider', lambda _settings: provider)
+    monkeypatch.setattr('casual_scout.collection.platforms.AppleProvider', lambda _settings: provider)
     run_id = jobs.submit('manual', countries, 'pipeline-nine')
     assert cli.main(['pipeline', '--run-id', run_id, '--data-dir', str(repo.data_dir),
                      '--no-enrich']) == 0
@@ -50,7 +50,7 @@ def test_pipeline_does_not_analyze_when_collection_fails(tmp_path: Path, monkeyp
         def __init__(self, repository: object) -> None:
             raise AssertionError("analysis must not run after a failed collection")
 
-    monkeypatch.setattr(cli, "Collector", FakeCollector)
+    monkeypatch.setattr("casual_scout.collection.platforms.execute_run", lambda *a, **kw: "failed")
     monkeypatch.setattr(cli, "AnalysisService", UnexpectedAnalysisService)
 
     exit_code = cli.main(

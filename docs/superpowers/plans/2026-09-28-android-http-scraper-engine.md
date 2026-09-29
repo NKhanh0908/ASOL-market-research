@@ -10,6 +10,22 @@
 
 **Spec:** [SPEC-AND-01](../specs/2026-09-28-android-http-scraper-engine-spec.md)
 
+## Execution status — 2026-09-29
+
+Authoritative progress: [acceptance report](../../operations/2026-09-29-android-plan-completion.md).
+The user accepted the current operational limits on 2026-09-29; original strict release
+criteria below are retained. Step checkboxes in the original recipes are historical
+instructions, not a claim that every RED/commit command was executed separately.
+
+- [x] Task 1: source probe, captured contract and fixtures reviewed; GET discrepancy documented.
+- [x] Tasks 2–4: transport, parser and provider implemented with failure-path tests.
+- [x] Task 5 implementation: harness delivered; 61 Google tests, 100% statement/branch coverage.
+- [x] Cold/warm pair measured on temporary data; zero browser processes, zero missing installs.
+- [ ] Original release gate: GET-only source, eighteen complete Top100 charts, six runs each <60s.
+
+Charts use the baseline POST RPC implementation. Short Grossing charts stay `partial`.
+Measured cold 384.81s / warm 106.82s; additional pairs stopped after user acceptance.
+
 ## Global Constraints
 
 - “Chi phí: **$0.00**.” Không API key, đăng nhập hoặc dịch vụ trả phí.

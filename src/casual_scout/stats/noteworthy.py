@@ -7,7 +7,9 @@ from datetime import date, timedelta
 from casual_scout.storage import Repository
 
 
-def observed_charts(repo: Repository, day: str, collection="topfreeapplications") -> dict:
+def observed_charts(
+    repo: Repository, day: str, collection="topfreeapplications", *, platform="ios"
+) -> dict:
     """One complete chart per market; prefer the pinned canonical if applicable."""
     with closing(repo._connect()) as db:
         rows = db.execute(
@@ -16,10 +18,17 @@ def observed_charts(repo: Repository, day: str, collection="topfreeapplications"
             JOIN charts c ON c.id=mr.chart_id
             LEFT JOIN daily_canonical_snapshots d ON d.snapshot_id=s.id AND d.date=?
             WHERE substr(s.observed_at,1,10)=? AND s.quality='complete'
-              AND c.collection=? AND c.provider='apple' AND c.platform='ios'
-              AND c.genre='7003' AND c.depth=100
+              AND c.collection=? AND c.provider=? AND c.platform=?
+              AND c.genre=? AND c.depth=100
             ORDER BY (d.snapshot_id IS NOT NULL) DESC, s.observed_at DESC, s.id DESC""",
-            (day, day, collection),
+            (
+                day,
+                day,
+                collection,
+                "google" if platform == "android" else "apple",
+                platform,
+                "GAME_CASUAL" if platform == "android" else "7003",
+            ),
         ).fetchall()
         charts = {}
         for row in rows:
@@ -98,7 +107,9 @@ def rank_noteworthy(records, current, previous, three_days_ago, shortlisted_app_
             old = baseline.get(market, {}).get(app_id)
             entry[f"delta_{offset}d"] = old - rank if old is not None and rank is not None else None
         entry.update(
-            signal=("MULTI_MARKET_RISE", "RISING", "NEW_ENTRY", "NO_SIGNAL", "INSUFFICIENT_DATA")[priority],
+            signal=("MULTI_MARKET_RISE", "RISING", "NEW_ENTRY", "NO_SIGNAL", "INSUFFICIENT_DATA")[
+                priority
+            ],
             signal_reasons=reasons or [label],
             noteworthy_label=label,
             noteworthy_reasons=reasons or [label],
@@ -112,14 +123,28 @@ def rank_noteworthy(records, current, previous, three_days_ago, shortlisted_app_
             is_shortlisted=app_id in (shortlisted_app_ids or set()),
         )
         result.append((priority, entry))
-    result.sort(key=lambda pair: (pair[0], -len(pair[1]["rising_markets"]),
-                                 pair[1]["current_rank"], str(pair[1]["app_id"])))
+    result.sort(
+        key=lambda pair: (
+            pair[0],
+            -len(pair[1]["rising_markets"]),
+            pair[1]["current_rank"],
+            str(pair[1]["app_id"]),
+        )
+    )
     return [entry for _, entry in result]
 
 
-def noteworthy_for_date(repo, records, day, shortlisted_app_ids=None, *, markets=None):
+def noteworthy_for_date(
+    repo, records, day, shortlisted_app_ids=None, *, markets=None, platform="ios"
+):
     target = date.fromisoformat(day)
-    charts = [observed_charts(repo, (target - timedelta(days=n)).isoformat()) for n in (0, 1, 3)]
+    collection = "top-free" if platform == "android" else "topfreeapplications"
+    charts = [
+        observed_charts(
+            repo, (target - timedelta(days=n)).isoformat(), collection, platform=platform
+        )
+        for n in (0, 1, 3)
+    ]
     if markets is not None:
         charts = [{c: ranks for c, ranks in chart.items() if c in markets} for chart in charts]
     return rank_noteworthy(records, *charts, shortlisted_app_ids)

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from casual_scout.collection.jobs import JobService
@@ -114,8 +115,10 @@ def test_p1_end_to_end_offline_acceptance(evidence_dir: Path, tmp_path: Path):
 
 
     # 3. Test duplicate request_key deduplication
-    duplicate_run_id = jobs.submit("manual", ["vn"], req_key)
+    duplicate_run_id = jobs.submit("manual", ["vn", "us", "tl"], req_key)
     assert duplicate_run_id == run_id
+    with pytest.raises(ValueError, match="scope mismatch"):
+        jobs.submit("manual", ["vn"], req_key)
 
     # 4. Verify VN snapshot and metadata in DB
     vn_snap = repo.latest_complete(Chart("vn"))

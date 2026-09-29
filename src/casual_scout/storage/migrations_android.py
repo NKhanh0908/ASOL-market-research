@@ -51,3 +51,16 @@ def migrate_android_columns(conn: sqlite3.Connection) -> None:
         )
         """
     )
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='daily_canonical_snapshots'").fetchone():
+        conn.execute("""
+            INSERT OR IGNORE INTO platform_canonical_snapshots
+                (date,platform,country,feed_type,snapshot_id,observed_at,created_at)
+            SELECT d.date,c.platform,d.country,
+                   CASE WHEN c.collection IN ('topgrossingapplications','top-grossing')
+                        THEN 'top-grossing' ELSE 'top-free' END,
+                   d.snapshot_id,d.observed_at,d.created_at
+            FROM daily_canonical_snapshots d
+            JOIN snapshots s ON s.id=d.snapshot_id
+            JOIN market_runs m ON m.id=s.market_run_id
+            JOIN charts c ON c.id=m.chart_id
+        """)

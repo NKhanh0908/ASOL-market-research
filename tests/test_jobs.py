@@ -1,7 +1,9 @@
 import os
 from pathlib import Path
 
-from casual_scout.collection.jobs import JobService
+import pytest
+
+from casual_scout.collection.jobs import CollectionBusyError, JobService
 from casual_scout.storage import Repository
 
 
@@ -41,8 +43,9 @@ def test_submit_while_active_run_returns_active_run(tmp_path: Path):
     jobs = JobService(repo)
 
     run1 = jobs.submit("manual", ["vn"], "req-key-1")
-    run2 = jobs.submit("manual", ["us"], "req-key-2")
-    assert run1 == run2
+    with pytest.raises(CollectionBusyError):
+        jobs.submit("manual", ["us"], "req-key-2")
+    assert jobs.submit("manual", ["vn"], "req-key-3") == run1
 
 
 def test_claim_and_heartbeat_and_finish(tmp_path: Path):

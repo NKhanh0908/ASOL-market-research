@@ -25,6 +25,8 @@ class AnalysisService:
         self, date_str: str, countries: list[str] | None = None, *, platform: str = "ios"
     ) -> dict[str, Any]:
         """Perform daily analysis for date_str (YYYY-MM-DD UTC) across specified or all markets for a given platform."""
+        if platform == 'android':
+            return self._analyze_android(date_str, countries)
         target_date = date.fromisoformat(date_str)
 
         if countries:
@@ -236,3 +238,67 @@ class AnalysisService:
             'date': date_str,
             'markets': analyzed_markets,
         }
+
+    def _analyze_android(self, date_str: str, countries: list[str] | None) -> dict[str, Any]:
+        target = date.fromisoformat(date_str)
+        countries = list(dict.fromkeys(c.lower() for c in (countries or ['vn','th','id','my','ph','sg','la','kh','us'])))
+
+        def snapshot(day: str, country: str, feed: str):
+            canonical = self.repository.get_canonical_snapshot(day, country, platform='android', feed_type=feed)
+            if canonical is None:
+                latest = self.repository.find_latest_complete_snapshot_for_date(day, country, collection=feed, platform='android', include_partial=True)
+                if latest is None:
+                    return None
+                self.repository.save_canonical_snapshot(day, country, latest['id'], latest['observed_at'], platform='android', feed_type=feed)
+                canonical = {'snapshot_id': latest['id']}
+            return self.repository.get_snapshot(canonical['snapshot_id'])
+
+        current = {country: {feed: snapshot(date_str,country,feed) for feed in ('top-free','top-grossing')} for country in countries}
+        union = {country: list(dict.fromkeys(entry['app_id'] for snap in feeds.values() if snap for entry in snap['entries'])) for country, feeds in current.items()}
+        presence = compute_cross_market_presence(union)
+        analyzed = []
+        qualities = {}
+        for country, feeds in current.items():
+            if not union[country]:
+                continue
+            maps = {feed: {e['app_id']:e for e in snap['entries']} if snap else {} for feed,snap in feeds.items()}
+            metadata = {feed: self.repository.get_snapshot_metadata(snap['id']) if snap else {} for feed,snap in feeds.items()}
+            history = {feed: {} for feed in feeds}
+            history_quality = {feed: {} for feed in feeds}
+            for feed in feeds:
+                for days in (1,3,7):
+                    past = snapshot((target-timedelta(days=days)).isoformat(),country,feed)
+                    if past:
+                        history[feed][days] = {e['app_id']: e['rank'] for e in past['entries']}
+                        history_quality[feed][days] = past['quality']
+            records = []
+            for app_id in union[country]:
+                feed = 'top-free' if app_id in maps['top-free'] else 'top-grossing'
+                other = 'top-grossing' if feed == 'top-free' else 'top-free'
+                entry = maps[feed][app_id]
+                rank = entry['rank']
+                delta = compute_rank_deltas({app_id: rank}, history[feed])[app_id]
+                # A shorter chart proves observed ranks, but absence cannot prove
+                # entry into the Top 100. Retain deltas for observed packages.
+                if history_quality[feed].get(1) != 'complete':
+                    delta['is_new_entry'] = False
+                meta = dict(metadata[feed].get(app_id) or {})
+                for key, value in metadata[other].get(app_id, {}).items():
+                    if meta.get(key) is None:
+                        meta[key] = value
+                free = maps['top-free'].get(app_id,{}).get('rank')
+                gross = maps['top-grossing'].get(app_id,{}).get('rank')
+                signal, reasons = evaluate_signal(current_rank=rank, rank_1d=delta.get('rank_1d_ago'), delta_1d=delta.get('delta_1d'), rank_3d=delta.get('rank_3d_ago'), delta_3d=delta.get('delta_3d'), is_new_entry=delta.get('is_new_entry',False))
+                taxonomy = classify_app(genres=meta.get('genres') or entry.get('source_genres') or [],title=entry['name'],description=meta.get('description') or '')
+                ads = None if meta.get('has_ads') is None else bool(meta['has_ads'])
+                iap = None if meta.get('has_iap') is None else bool(meta['has_iap'])
+                records.append(dict(date=date_str,country=country,app_id=app_id,current_rank=rank,
+                    **{key:delta.get(key) for key in ('rank_1d_ago','delta_1d','rank_3d_ago','delta_3d','rank_7d_ago','delta_7d')},
+                    signal=signal,signal_reasons=reasons,subgenre=taxonomy['subgenre'],mechanic=taxonomy['mechanic'],mechanic_evidence=taxonomy['evidence'],mechanic_confidence=taxonomy['confidence'],
+                    cross_markets=presence[app_id],cross_market_count=len(presence[app_id]),free_rank=free,grossing_rank=gross,
+                    monetization_model=classify_android_monetization(price=meta.get('price'),has_ads=ads,has_iap=iap,grossing_rank=gross),
+                    monetization_efficiency_flag=compute_monetization_efficiency(free,gross),platform='android',installs=meta.get('installs'),min_installs=meta.get('min_installs')))
+            self.repository.save_daily_analytics(records)
+            analyzed.append(country)
+            qualities[country] = {feed: snap['quality'] if snap else None for feed,snap in feeds.items()}
+        return {"status": 'completed', "date": date_str, "markets": analyzed, "platform": 'android', "chart_quality": qualities}

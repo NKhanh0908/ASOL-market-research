@@ -1,4 +1,5 @@
 """Evidence-based parsers for Google Play charts and application metadata."""
+
 from __future__ import annotations
 
 import html
@@ -35,6 +36,13 @@ def minimum_from_ascii_display(text: str) -> int | None:
 
 def parse_google_chart(body: bytes, chart: Chart) -> ParsedChart:
     """Parse Google Play batchexecute response bytes into a ParsedChart."""
+    if (
+        chart.provider != "google"
+        or chart.platform != "android"
+        or chart.genre != "GAME_CASUAL"
+        or chart.feed_type not in ("top-free", "top-grossing")
+    ):
+        return ParsedChart(chart, [], None, "invalid", ["wrong Google chart identity"])
     text = body.decode("utf-8", errors="replace")
     entries: list[Entry] = []
     issues: list[str] = []
@@ -68,17 +76,20 @@ def parse_google_chart(body: bytes, chart: Chart) -> ParsedChart:
                     seen: set[str] = set()
                     for idx, app_item in enumerate(apps_container):
                         if not isinstance(app_item, list) or not app_item:
-                            continue
+                            return ParsedChart(
+                                chart, [], None, "invalid", ["malformed ranked chart entry"]
+                            )
                         app_info = (
                             app_item[0]
                             if isinstance(app_item[0], list) and app_item[0]
                             else app_item
                         )
-                        if not isinstance(app_info, list) or not app_info:
-                            continue
-
                         package = None
-                        if isinstance(app_info[0], list) and app_info[0] and isinstance(app_info[0][0], str):
+                        if (
+                            isinstance(app_info[0], list)
+                            and app_info[0]
+                            and isinstance(app_info[0][0], str)
+                        ):
                             package = app_info[0][0]
                         elif isinstance(app_info[0], str):
                             package = app_info[0]
@@ -91,13 +102,31 @@ def parse_google_chart(body: bytes, chart: Chart) -> ParsedChart:
                             package = app_info[1][0]
 
                         if not package:
-                            continue
+                            return ParsedChart(
+                                chart, [], None, "invalid", ["ranked chart entry missing package"]
+                            )
                         if package in seen:
-                            continue
+                            return ParsedChart(
+                                chart, [], None, "invalid", ["duplicate package in chart"]
+                            )
+                        if not re.fullmatch(
+                            r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+", package
+                        ):
+                            return ParsedChart(
+                                chart, [], None, "invalid", ["invalid package in chart"]
+                            )
                         seen.add(package)
 
-                        name = app_info[3] if len(app_info) > 3 and isinstance(app_info[3], str) else package
-                        developer = app_info[14] if len(app_info) > 14 and isinstance(app_info[14], str) else None
+                        name = (
+                            app_info[3]
+                            if len(app_info) > 3 and isinstance(app_info[3], str)
+                            else package
+                        )
+                        developer = (
+                            app_info[14]
+                            if len(app_info) > 14 and isinstance(app_info[14], str)
+                            else None
+                        )
                         icon_url = (
                             app_info[1][3][2]
                             if len(app_info) > 1
@@ -111,7 +140,7 @@ def parse_google_chart(body: bytes, chart: Chart) -> ParsedChart:
                         entries.append(
                             Entry(
                                 app_id=package,
-                                rank=len(seen),
+                                rank=idx + 1,
                                 name=name or package,
                                 store_url=store_url,
                                 icon_url=icon_url,
@@ -122,13 +151,16 @@ def parse_google_chart(body: bytes, chart: Chart) -> ParsedChart:
 
         if not found_payload or not entries:
             issues.append("missing vyAe2 batchexecute payload or empty apps list")
-            return ParsedChart(chart=chart, entries=[], source_updated=None, quality="invalid", issues=issues)
+            return ParsedChart(
+                chart=chart, entries=[], source_updated=None, quality="invalid", issues=issues
+            )
 
         # Quality assessment
-        if chart.feed_type == "top-free":
-            quality = "complete" if len(entries) == 100 else "partial"
-        else:
-            quality = "complete" if len(entries) >= 40 else "partial"
+        if len(entries) > chart.depth:
+            return ParsedChart(chart, [], None, "invalid", ["chart exceeds requested depth"])
+        quality = "complete" if len(entries) == chart.depth else "partial"
+        if quality == "partial":
+            issues.append(f"source returned {len(entries)} of {chart.depth} requested ranks")
 
         return ParsedChart(
             chart=chart,
@@ -138,9 +170,11 @@ def parse_google_chart(body: bytes, chart: Chart) -> ParsedChart:
             issues=issues,
         )
 
-    except Exception as exc:
+    except (ValueError, TypeError, IndexError, KeyError) as exc:
         issues.append(f"exception parsing Google Play chart: {exc}")
-        return ParsedChart(chart=chart, entries=[], source_updated=None, quality="invalid", issues=issues)
+        return ParsedChart(
+            chart=chart, entries=[], source_updated=None, quality="invalid", issues=issues
+        )
 
 
 def _safe_get(data: Any, path: list[int]) -> Any:
@@ -153,9 +187,30 @@ def _safe_get(data: Any, path: list[int]) -> Any:
     return current
 
 
+def _number(value: Any) -> float | None:
+    import math
+
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        number = float(value)
+        return number if math.isfinite(number) else None
+    except (TypeError, ValueError):
+        return None
+
+
 def parse_google_metadata(body: bytes, package: str) -> dict:
     """Parse Google Play app detail page bytes into structured metadata."""
     text = body.decode("utf-8", errors="replace")
+    canonical = re.search(r'<link\b[^>]*rel=["\']canonical["\'][^>]*href=["\']([^"\']+)', text)
+    if canonical:
+        from urllib.parse import parse_qs, urlparse
+
+        identity = parse_qs(urlparse(html.unescape(canonical[1])).query).get("id", [None])[0]
+        if identity is not None and identity != package:
+            result = parse_google_metadata(b"", package)
+            result["error"] = "metadata package does not match requested package"
+            return result
     callbacks = dict(
         re.findall(
             r"AF_initDataCallback\(\{key:\s*'([^']+)',.*?data:([\s\S]*?)(?:,\s*sideChannel:|\}\);)",
@@ -164,16 +219,20 @@ def parse_google_metadata(body: bytes, package: str) -> dict:
     )
 
     ds5_container = None
-    for k, raw_v in callbacks.items():
+    for raw_v in callbacks.values():
         try:
             parsed_v = json.loads(raw_v.strip())
             # Search for the container having app details
             candidate = _safe_get(parsed_v, [1, 2])
-            if isinstance(candidate, list) and len(candidate) > 13 and isinstance(candidate[13], list):
+            if (
+                isinstance(candidate, list)
+                and len(candidate) > 13
+                and isinstance(candidate[13], list)
+            ):
                 ds5_container = candidate
                 break
-        except Exception:
-            pass
+        except json.JSONDecodeError:
+            continue
 
     if not ds5_container:
         return {
@@ -213,9 +272,16 @@ def parse_google_metadata(body: bytes, package: str) -> dict:
 
     # Extract ratings
     rating_val = _safe_get(ds5_container, [51, 0, 1]) or _safe_get(ds5_container, [51, 1])
-    average_rating = float(rating_val) if rating_val is not None else None
+    average_rating = _number(rating_val)
+    if average_rating is not None and not 0 <= average_rating <= 5:
+        average_rating = None
     count_val = _safe_get(ds5_container, [51, 2, 1]) or _safe_get(ds5_container, [51, 3])
-    rating_count = int(count_val) if count_val is not None else None
+    count_number = _number(count_val)
+    rating_count = (
+        int(count_number)
+        if count_number is not None and count_number >= 0 and count_number.is_integer()
+        else None
+    )
 
     # Extract installs
     installs_list = _safe_get(ds5_container, [13])
@@ -223,8 +289,13 @@ def parse_google_metadata(body: bytes, package: str) -> dict:
     min_installs = None
     if isinstance(installs_list, list) and len(installs_list) > 0:
         installs_text = installs_list[0]
-        if len(installs_list) > 1 and isinstance(installs_list[1], (int, float)):
-            min_installs = int(installs_list[1])
+        if (
+            len(installs_list) > 1
+            and isinstance(installs_list[1], int)
+            and not isinstance(installs_list[1], bool)
+            and installs_list[1] >= 0
+        ):
+            min_installs = installs_list[1]
         elif isinstance(installs_text, str):
             min_installs = minimum_from_ascii_display(installs_text)
 
@@ -233,6 +304,7 @@ def parse_google_metadata(body: bytes, package: str) -> dict:
     currency = _safe_get(ds5_container, [57, 0, 0, 0, 0, 1, 0, 1])
     if currency is None:
         raw_57 = _safe_get(ds5_container, [57])
+
         def _search_currency_and_price(node: Any) -> None:
             nonlocal currency, price_val
             if isinstance(node, list):
@@ -242,14 +314,20 @@ def parse_google_metadata(body: bytes, package: str) -> dict:
                 currency = node
             elif isinstance(node, (int, float)) and price_val is None:
                 price_val = node
+
         _search_currency_and_price(raw_57)
 
-    price = (price_val / 1_000_000) if isinstance(price_val, (int, float)) and price_val > 1000 else float(price_val or 0.0)
+    price = (
+        (price_val / 1_000_000)
+        if isinstance(price_val, (int, float)) and price_val > 1000
+        else (float(price_val) if isinstance(price_val, (int, float)) else None)
+    )
 
     # Extract icon
     icon_url = _safe_get(ds5_container, [95, 0, 3, 2]) or _safe_get(ds5_container, [95, 0, 3])
     if not icon_url:
         raw_95 = _safe_get(ds5_container, [95])
+
         def _search_icon(node: Any) -> None:
             nonlocal icon_url
             if isinstance(node, list):
@@ -257,18 +335,41 @@ def parse_google_metadata(body: bytes, package: str) -> dict:
                     _search_icon(item)
             elif isinstance(node, str) and node.startswith("http"):
                 icon_url = node
+
         _search_icon(raw_95)
 
     # Extract flags
-    has_ads = bool(_safe_get(ds5_container, [48]))
-    has_iap = bool(_safe_get(ds5_container, [19, 0]))
+    ads_value = _safe_get(ds5_container, [48])
+    iap_value = _safe_get(ds5_container, [19, 0])
+    has_ads = bool(ads_value) if ads_value is not None else None
+    has_iap = bool(iap_value) if iap_value is not None else None
 
     # Extract genres / categories
     genres: list[dict[str, str]] = []
-    genre_name = _safe_get(ds5_container, [79, 0, 0, 0]) or "Casual"
-    genres.append({"name": genre_name})
+    genre_name = _safe_get(ds5_container, [79, 0, 0, 0]) or _safe_get(ds5_container, [79, 0])
+    if isinstance(genre_name, str):
+        genres.append({"name": genre_name})
 
-    status = "complete" if name and (min_installs is not None) else "partial"
+    required = (
+        name,
+        developer,
+        description,
+        genres,
+        average_rating,
+        rating_count,
+        price,
+        currency,
+        icon_url,
+        installs_text,
+        min_installs,
+        has_ads,
+        has_iap,
+    )
+    status = (
+        "complete"
+        if all(value is not None for value in required) and name and genres
+        else "partial"
+    )
 
     return {
         "package": package,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
@@ -15,6 +16,14 @@ from casual_scout.storage.migrations_android import migrate_android_columns
 from casual_scout.storage.raw import RawStore
 
 _OPEN_RUN_STATUSES = {"queued", "running"}
+
+
+def _validate_identity(provider: str, platform: str, app_id: str) -> None:
+    if (provider, platform) not in (("apple", "ios"), ("google", "android")):
+        raise ValueError("unsupported provider/platform identity")
+    pattern = r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+"
+    if not isinstance(app_id, str) or not app_id or (platform == 'android' and re.fullmatch(pattern, app_id) is None):
+        raise ValueError("invalid app identity")
 _MARKETS = (
     ("vn", "Vietnam", "ASEAN", "verified", None),
     ("us", "United States", "US", "verified", None),
@@ -215,7 +224,7 @@ class Repository:
             if row is None or row["scheduled_for_utc"] is None:
                 return None
 
-            due_at = datetime.fromisoformat(str(row["scheduled_for_utc"]).replace("Z", "+00:00"))
+            due_at = datetime.fromisoformat(str(row["scheduled_for_utc"]))
             if due_at > now_utc:
                 return None
             if now_utc - due_at > timedelta(minutes=1):
@@ -459,6 +468,16 @@ class Repository:
     ) -> dict[str, str]:
         if result.body is None:
             raise ValueError("metadata response body is required")
+        for app_id, metadata in values.items():
+            _validate_identity(provider, platform, app_id)
+            if not isinstance(metadata, dict):
+                raise TypeError("metadata must be a mapping")
+            if platform == "android":
+                minimum = metadata.get("min_installs")
+                if minimum is not None and (type(minimum) is not int or minimum < 0):
+                    raise ValueError("min_installs must be a non-negative integer")
+                if metadata.get("status", "complete") not in ("complete", "partial", "failed"):
+                    raise ValueError("invalid metadata status")
         country = country.lower()
         raw_records, final_hash = self._persist_result_bodies(result)
         fetched_at = _utc_text(result.started_at)
@@ -589,29 +608,28 @@ class Repository:
         if not app_ids:
             return {}
         ttl_hours = 48 if platform == "android" else 24
-        now_text = _utc_text(now)
-        fresh_after = _utc_text(now.astimezone(UTC) - timedelta(hours=ttl_hours))
+        _utc_text(now)  # reject naive timestamps
+        fresh_after = now.astimezone(UTC) - timedelta(hours=ttl_hours)
         unique_ids = list(dict.fromkeys(app_ids))
         placeholders = ", ".join("?" for _ in unique_ids)
         query = f"""
-            SELECT app_id, id
-            FROM (
-                SELECT app_id, id,
-                       ROW_NUMBER() OVER (
-                           PARTITION BY app_id ORDER BY fetched_at DESC, id DESC
-                       ) AS newest
-                FROM metadata_versions
+            SELECT app_id, id, fetched_at FROM metadata_versions
                 WHERE provider = ? AND platform = ? AND country = ?
-                  AND status = 'complete' AND fetched_at >= ? AND fetched_at <= ?
+                  AND status = 'complete'
                   AND app_id IN ({placeholders})
-            )
-            WHERE newest = 1
         """
         with closing(self._connect()) as connection:
             rows = connection.execute(
-                query, (provider, platform, country.lower(), fresh_after, now_text, *unique_ids)
+                query, (provider, platform, country.lower(), *unique_ids)
             ).fetchall()
-        return {row["app_id"]: row["id"] for row in rows}
+        # ISO strings with optional fractional seconds cannot be ordered lexically
+        # at exact boundaries ("...00Z" sorts after "...00.000001Z").
+        eligible = [(datetime.fromisoformat(row['fetched_at']), row) for row in rows]
+        cached = {}
+        for stamp, row in sorted(eligible, key=lambda item: (item[0], item[1]['id'])):
+            if fresh_after <= stamp <= now:
+                cached[row['app_id']] = row['id']
+        return cached
 
     def bind_metadata(self, snapshot_id: str, versions: dict[str, str]) -> None:
         with self._write_connection() as connection:
@@ -671,7 +689,9 @@ class Repository:
                 """
                 SELECT
                     (SELECT COUNT(*) FROM entries WHERE snapshot_id = ?) AS entries,
-                    (SELECT COUNT(*) FROM snapshot_metadata WHERE snapshot_id = ?) AS bound
+                    (SELECT COUNT(*) FROM snapshot_metadata sm
+                     JOIN metadata_versions mv ON mv.id=sm.metadata_version_id
+                     WHERE sm.snapshot_id = ? AND mv.status='complete') AS bound
                 """,
                 (snapshot_id, snapshot_id),
             ).fetchone()
@@ -728,6 +748,19 @@ class Repository:
         country_norm = country.lower()
         now = _utc_text(datetime.now(UTC))
         with self._write_connection() as connection:
+            identity = connection.execute(
+                """SELECT s.observed_at, c.provider, c.platform, c.country, c.collection
+                   FROM snapshots s JOIN market_runs m ON m.id=s.market_run_id
+                   JOIN charts c ON c.id=m.chart_id WHERE s.id=?""", (snapshot_id,)
+            ).fetchone()
+            expected_provider = "google" if platform == "android" else "apple"
+            expected_collection = feed_type if platform == "android" else (
+                "topgrossingapplications" if feed_type == "top-grossing" else "topfreeapplications")
+            if identity is None or identity['platform'] != platform or identity['provider'] != expected_provider or identity['country'] != country_norm or identity['observed_at'][:10] != date_str or identity['observed_at'] != observed_at:
+                raise ValueError("canonical snapshot identity does not match")
+            # Legacy iOS selection permits a grossing fallback; Android must match the feed.
+            if platform == "android" and identity['collection'] != expected_collection:
+                raise ValueError("canonical snapshot feed does not match")
             if platform == "ios":
                 connection.execute(
                     """
@@ -795,6 +828,7 @@ class Repository:
         collection: str | None = None,
         *,
         platform: str = "ios",
+        include_partial: bool = False,
     ) -> dict[str, Any] | None:
         """Find the latest complete snapshot observed on date_str (UTC YYYY-MM-DD) for country, platform and optional collection."""
         country_norm = country.lower()
@@ -805,10 +839,10 @@ class Repository:
             FROM snapshots
             JOIN market_runs ON market_runs.id = snapshots.market_run_id
             JOIN charts ON charts.id = market_runs.chart_id
-            WHERE charts.country = ? AND charts.platform = ? AND snapshots.quality = 'complete'
+            WHERE charts.country = ? AND charts.platform = ? AND charts.provider = ? AND snapshots.quality IN ('complete', ?)
               AND snapshots.observed_at >= ? AND snapshots.observed_at <= ?
         """
-        params: list[Any] = [country_norm, platform, day_start, day_end]
+        params: list[Any] = [country_norm, platform, 'google' if platform == 'android' else 'apple', 'partial' if include_partial else 'complete', day_start, day_end]
         if collection:
             query += " AND charts.collection = ?"
             params.append(collection)
@@ -825,6 +859,13 @@ class Repository:
         now = _utc_text(datetime.now(UTC))
         with self._write_connection() as connection:
             for rec in records:
+                platform = rec.get('platform', 'ios')
+                _validate_identity('google' if platform == 'android' else 'apple', platform, str(rec['app_id']))
+                existing = connection.execute(
+                    'SELECT platform FROM daily_rank_analytics WHERE date=? AND country=? AND app_id=?',
+                    (rec['date'], rec['country'].lower(), str(rec['app_id']))).fetchone()
+                if existing is not None and existing['platform'] != platform:
+                    raise ValueError('analytics collision across platforms')
                 rec_id = rec.get("id") or _uuid()
                 signal_reasons = rec.get("signal_reasons")
                 if isinstance(signal_reasons, (list, dict)):
@@ -971,10 +1012,12 @@ class Repository:
                        platform, installs, min_installs
                 FROM daily_rank_analytics
                 WHERE app_id = ? AND country = ? AND platform = ?
+                  AND date >= date((SELECT MAX(date) FROM daily_rank_analytics
+                     WHERE app_id = ? AND country = ? AND platform = ?), ?)
                 ORDER BY date DESC
                 LIMIT ?
                 """,
-                (str(app_id), country_norm, platform, limit),
+                (str(app_id), country_norm, platform, str(app_id), country_norm, platform, f'-{max(0, limit-1)} days', limit),
             ).fetchall()
         return [dict(r) for r in rows]
 
@@ -1192,8 +1235,7 @@ class Repository:
         app_id: str,
         created_at: datetime,
     ) -> str:
-        if not isinstance(app_id, str) or not app_id:
-            raise ValueError("app IDs must be non-empty text")
+        _validate_identity(provider, platform, app_id)
         existing = connection.execute(
             """
             SELECT id FROM apps

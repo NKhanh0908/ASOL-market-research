@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Đánh giá AI{% endblock %}
+{% block content %}
+<section class="card">
+  <h1 class="page-heading">Đánh giá AI đã lưu</h1>
+  <p>Kết quả cần được kiểm duyệt trước khi ra quyết định.</p>
+  {% for run in runs %}
+  <article><a href="/recommendations/{{ run.id }}">{{ run.analysis_date }} · {{ run.status }}</a>
+    {% if run.result %}<pre>{{ run.result | tojson(indent=2) }}</pre>{% endif %}
+  </article>
+  {% else %}<p>Chưa có lượt đánh giá.</p>{% endfor %}
+</section>
+{% endblock %}

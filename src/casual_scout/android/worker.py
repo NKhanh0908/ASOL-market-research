@@ -18,9 +18,18 @@ LOG = logging.getLogger(__name__)
 
 def collect(store, job_id, provider_factory=None):
     if provider_factory is None:
-        from casual_scout.android.provider import GooglePlayBrowser
+        from contextlib import closing
 
-        provider_factory = GooglePlayBrowser
+        from casual_scout.collection.platforms import execute_run
+
+        with closing(store.repo._connect()) as db:
+            rows = db.execute(
+                "SELECT DISTINCT c.platform FROM market_runs m JOIN charts c ON c.id=m.chart_id WHERE m.run_id=?",
+                (job_id,),
+            ).fetchall()
+        if len(rows) != 1 or rows[0]["platform"] != "android":
+            raise ValueError("Archived Android jobs are read-only; submit a new core HTTP run")
+        return execute_run(store.repo, job_id)
     jobs = JobService(store.repo)
     pid = os.getpid()
     created = psutil.Process(pid).create_time()

@@ -18,31 +18,9 @@ def test_android_web_csrf_and_batch_api_while_run_active(tmp_path):
     job_id = first.json()["job_id"]
     assert client.post("/api/android/runs", headers=headers).json()["job_id"] == job_id
     store = AndroidStore(Repository(tmp_path))
-    store.save_chart(
-        job_id,
-        "top-free",
-        [{"package": "com.example.one", "rank": 1, "name": "<script>unsafe</script>"}],
-        "fixture",
-    )
-    store.save_batch(
-        job_id,
-        [
-            {
-                "package": "com.example.one",
-                "developer": "Studio",
-                "metadata_status": "complete",
-                "application_category": "GAME_CASUAL",
-                "google_play_genres": [{"label": "Giải đố", "code": "GAME_PUZZLE"}],
-            }
-        ],
-    )
-    response = client.get("/api/android/data", params={"job_id": job_id})
-    assert response.status_code == 200
-    assert response.json()["job"]["processed"] == 1
-    assert response.json()["entries"][0]["developer"] == "Studio"
-    assert response.json()["entries"][0]["casual_status"] == "casual"
-    assert response.json()["entries"][0]["subgenre"] == "Puzzle"
-    assert response.json()["job"]["status"] == "queued"
+    with store.repo._connect() as db:
+        assert db.execute("SELECT count(*) FROM market_runs WHERE run_id=?", (job_id,)).fetchone()[0] == 18
+        assert db.execute("SELECT count(*) FROM android_jobs").fetchone()[0] == 0
     assert client.get("/api/android/data?job_id=missing").status_code == 404
     assert (
         client.patch("/api/android/schedule", headers=headers, json={"enabled": "yes"}).status_code
@@ -58,7 +36,9 @@ def test_android_web_csrf_and_batch_api_while_run_active(tmp_path):
 
 def test_android_page_exposes_progressive_results_and_announced_batch_count(tmp_path):
     app = create_app(Settings(tmp_path), android_launcher=lambda *_: None)
-    response = TestClient(app).get("/android")
+    store = AndroidStore(Repository(tmp_path))
+    archived_id = store.enqueue()
+    response = TestClient(app).get("/android", params={"job_id": archived_id})
 
     assert response.status_code == 200
     assert 'id="android-crawl"' in response.text

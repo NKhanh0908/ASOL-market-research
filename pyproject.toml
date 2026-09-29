@@ -21,10 +21,11 @@ dependencies = [
 casual_scout = "casual_scout.cli:main"
 
 [project.optional-dependencies]
-android = ["selenium==4.49.0"]
+android = []
 dev = [
     "pytest>=8,<9",
     "ruff>=0.6,<1",
+    "coverage>=7,<8",
 ]
 
 [tool.pytest.ini_options]

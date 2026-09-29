@@ -15,12 +15,12 @@
    - Các package links xuất hiện rải rác trên trang (27–59 packages) thuộc các carousel gợi ý cá nhân hóa / chủ đề (`RECOMMENDED_IN_TOPIC`, `NEW_RELEASES`), hoàn toàn không phải thứ tự rank 1..100 của chart.
 
 2. **Về Public HTTP GET (Metadata & Lượt cài đặt - Installs):**
-   - **HOÀN TOÀN KHẢ THI & CHÍNH XÁC 100%**.
+   - Parse thành công các mẫu đã khảo sát; chưa chứng minh coverage metadata 100% trên toàn bộ thị trường/app.
    - Endpoint `GET https://play.google.com/store/apps/details?id=<package>&hl=<lang>&gl=<country>` trả về cấu trúc `AF_initDataCallback` khóa `ds:5`.
    - Bóc tách được đầy đủ, chuẩn xác:
      - `installs`: Chuỗi hiển thị store (ví dụ: `"1.000.000.000+"`, `"10.000.000+"`).
      - `min_installs`: Số nguyên tối thiểu (ví dụ: `1000000000`, `10000000`).
-     - `real_installs`: Số lượt cài đặt chính xác thực tế (ví dụ: `2336253256`).
+     - `real_installs`: Trường số nội bộ quan sát được (ví dụ: `2336253256`), chưa xác minh ý nghĩa; không sử dụng như số cài đặt chính xác.
      - `score`, `ratings`, `price`, `currency`, `developer`, `icon_url`, `offersIAP`, `containsAds`.
    - Tốc độ: ~0.2 – 0.5s/request qua `httpx`, chi phí **$0.00**, hoàn toàn không cần Chrome/Selenium.
 
@@ -32,7 +32,7 @@
      - **Top Free:** Thu thập đủ **100/100 game** trên toàn bộ 9 thị trường (`vn, th, id, my, ph, sg, la, kh, us`).
      - **Top Grossing:**
        - Các thị trường lớn hoặc quốc tế (`us, la, kh`): Đạt **100/100 game**.
-       - Các thị trường Đông Nam Á phân mảnh (`vn: 49, th: 80, id: 90, my: 83, ph: 62, sg: 43`): Google Play chỉ có bấy nhiêu ứng dụng Casual có doanh thu niêm yết trong bảng Top Grossing tại các store này; không có token phân trang thêm.
+       - Các response khảo sát (`vn: 49, th: 80, id: 90, my: 83, ph: 62, sg: 43`) trả dưới 100. Chưa có bằng chứng đây là toàn bộ ứng dụng khả dụng; chưa xác nhận phương thức phân trang để lấy đủ 100. Code giữ `partial`.
 
 ---
 
@@ -101,7 +101,7 @@
    - **Thực tế:** Google Play Store web chỉ cung cấp chart data qua `POST` tới `batchexecute`. Không tồn tại URL `GET` trả lời chart rankings cho Google Play.
 2. **Ràng buộc Đủ 100 game cho mọi chart (`top-grossing`):**
    - Trong `SPEC-AND-01` (§1.2, §3.1) và `tests/test_google_contract.py`: yêu cầu cứng mọi chart đều phải có đúng 100 game (hạng 1..100).
-   - **Thực tế:** Tại một số store cục bộ nhỏ (như Singapore hoặc Việt Nam), thể loại Casual chỉ có 43 đến 49 game lọt vào danh sách có doanh thu (Top Grossing) trên toàn hệ thống Google Play. Không thể "bịa" thêm game vào bảng xếp hạng khi nguồn công khai của Google chỉ có bấy nhiêu.
+   - **Quan sát:** Response tại một số store trả 43–49 game. Không thể suy ra phần còn lại từ response này; cần giữ chart `partial`, không thêm game hoặc suy diễn hạng chưa quan sát.
 
 ---
 

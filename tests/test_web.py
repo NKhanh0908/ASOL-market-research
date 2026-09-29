@@ -254,7 +254,8 @@ def test_primary_pages_keep_existing_routes_and_navigation_targets(web_setup, pa
     response = client.get(path)
 
     assert response.status_code == 200
-    for destination in ("/dashboard", "/data", "/android", "/shortlist", "/runs"):
+    dashboard = '/dashboard?platform=android' if path == '/android' else '/dashboard'
+    for destination in (dashboard, "/data", "/data?platform=android", "/shortlist", "/runs"):
         assert f'href="{destination}"' in response.text
 
 
@@ -277,7 +278,7 @@ def test_pages_load_content_versioned_static_assets(web_setup, page):
     _repo, client, _launcher, _calls = web_setup
     html = client.get(page).text
     asset_urls = re.findall(r'(?:href|src)="(/static/[^" ]+)"', html)
-    assert len(asset_urls) == (3 if page == "/android" else 1)
+    assert len(asset_urls) == 1
     for url in asset_urls:
         asset = client.get(url)
         assert asset.status_code == 200
@@ -286,6 +287,18 @@ def test_pages_load_content_versioned_static_assets(web_setup, page):
     stylesheet = client.get(asset_urls[0]).text
     assert "--color-space:" in stylesheet
     assert ".nav-link svg" in stylesheet
+
+
+def test_android_archive_remains_accessible_with_legacy_assets(web_setup):
+    _repo, client, _launcher, _calls = web_setup
+    redirect = client.get('/android', follow_redirects=False)
+    assert redirect.status_code == 303
+    assert redirect.headers['location'] == '/data?platform=android'
+    archive = client.get('/android?job_id=legacy')
+    assert archive.status_code == 200
+    assets = re.findall(r'(?:href|src)="(/static/[^" ]+)"', archive.text)
+    assert len(assets) == 3
+    assert all(client.get(url).status_code == 200 for url in assets)
 
 
 def test_stylesheet_url_changes_when_css_changes_without_server_restart(web_setup, monkeypatch):

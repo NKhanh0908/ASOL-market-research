@@ -1,9 +1,7 @@
-from casual_scout.android import provider
+from casual_scout.android.classification import extract_store_classification
 
 
 def test_extract_store_category_and_genre_from_google_play_metadata():
-    extract_store_classification = getattr(provider, "extract_store_classification", None)
-    assert callable(extract_store_classification)
     result = extract_store_classification(
         {"applicationCategory": "GAME_CASUAL"},
         [
@@ -21,8 +19,6 @@ def test_extract_store_category_and_genre_from_google_play_metadata():
 
 
 def test_missing_google_play_category_stays_unknown():
-    extract_store_classification = getattr(provider, "extract_store_classification", None)
-    assert callable(extract_store_classification)
     result = extract_store_classification({}, [])
 
     assert result == {"application_category": None, "google_play_genres": []}

@@ -1,8 +1,11 @@
 """Platform validation, provider factory, and unified core worker dispatch."""
+
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import closing
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
+
 import httpx
 
 from casual_scout.android.collector import AndroidCollector

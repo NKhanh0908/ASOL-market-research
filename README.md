@@ -1,13 +1,12 @@
-# ASOL Market Research — Casual Scout (iOS P1-P3)
+# ASOL Market Research — Casual Scout
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
 [![SQLite WAL](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57.svg)](https://www.sqlite.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**Casual Scout** là nền tảng nghiên cứu thị trường game di động thể loại Casual trên iOS (Apple App Store) dành cho khu vực Đông Nam Á (11 thị trường ASEAN) và Hoa Kỳ (US). 
+**Casual Scout** là công cụ nghiên cứu thị trường game casual trên thiết bị di động. Ứng dụng thu thập bảng xếp hạng và metadata từ Apple App Store, theo dõi biến động thứ hạng, phân loại game, tổng hợp tín hiệu thị trường và hỗ trợ chọn ứng viên để nghiên cứu sâu hơn. Google Play dùng HTTP cho cùng chín thị trường, hỗ trợ Top Free và Top Grossing.
 
-Hệ thống cung cấp giải pháp trọn gói từ **thu thập tự động**, **phân loại cơ chế/thể loại (Taxonomy Engine)**, **phát hiện tín hiệu thị trường (Market Signals)**, đến **Opportunity Radar v1** và **Quản lý Danh sách Tiềm năng (Shortlist)**.
+Ứng dụng chạy cục bộ bằng Python, FastAPI và SQLite. Giao diện web phục vụ việc xem dữ liệu, theo dõi lượt thu thập và quản lý shortlist. Điểm cơ hội và gợi ý AI là tín hiệu hỗ trợ phân tích, không phải dự báo doanh thu hay quyết định tự động.
 
 ---
 
@@ -23,12 +22,14 @@ Hệ thống cung cấp giải pháp trọn gói từ **thu thập tự động*
 4. [Giao Diện Web (Localhost Dashboard)](#-giao-diện-web-localhost-dashboard)
 5. [Quy Trình Nghiên Cứu Đề Xuất](#-quy-trình-nghiên-cứu-đề-xuất)
 6. [Cấu Trúc Thư Mục Dữ Liệu](#-cấu-trúc-thư-mục-dữ-liệu)
+7. [Android HTTP](#android--http-crawl-và-phân-tích-đa-thị-trường)
+8. [Gemini pilot](#gemini-free-tier-pilot-manual-ai-evaluation)
 
 ---
 
 ## 🌟 Tính Năng Nổi Bật
 
-* **12 Thị trường theo dõi:** `vn` (Việt Nam), `us` (Mỹ), `sg` (Singapore), `th` (Thái Lan), `id` (Indonesia), `my` (Malaysia), `ph` (Philippines), `kh` (Campuchia), `la` (Lào), `mm` (Myanmar), `bn` (Brunei) và `tl` (Timor-Leste - ghi nhận unverified).
+* **9 thị trường iOS mặc định:** `vn` (Việt Nam), `th` (Thái Lan), `id` (Indonesia), `my` (Malaysia), `ph` (Philippines), `sg` (Singapore), `la` (Lào), `kh` (Campuchia) và `us` (Hoa Kỳ). CLI cho phép chọn phạm vi khác bằng `--countries`.
 * **Taxonomy Engine (P2):** Tự động phân loại 8 thể loại phụ (`Puzzle`, `Hypercasual`, `Simulation`, `Arcade`, `Action`, `Card/Board`, `Sports/Racing`, `Casual`) và nhận diện 9 cơ chế gameplay cốt lõi (`Match-3`, `Merge`, `Sort/Packing`, `Idle/Tycoon`, `Runner`, `Card/Board`, `Word/Trivia`, `Drawing/Physics`, `Unknown`) kèm trích xuất bằng chứng từ metadata.
 * **Market Signals (P2):** Phát hiện tức thì các hiện tượng thị trường:
   * 🚀 `FAST_RISER`: Tăng $\ge 20$ bậc trong 24h hoặc $\ge 30$ bậc trong 3 ngày.
@@ -38,9 +39,9 @@ Hệ thống cung cấp giải pháp trọn gói từ **thu thập tự động*
 * **Opportunity Radar v1 (P3):** Chấm điểm cơ hội giải trình minh bạch (Explainable Score 0-100đ):
   $$\text{Score} = \text{Momentum (40đ)} + \text{Market Breadth (35đ)} + \text{Rank Tier (25đ)}$$
   Phân tầng cơ hội: `🔥 Hot Wave` ($\ge 75$), `⚡ Breakout` ($55-74$), `💎 Regional Gem` ($35-54$), `👀 Monitoring` ($< 35$).
-* **Ma Trận Nhiệt Thị Trường (Heatmap):** Trực quan hóa mật độ phân bố của các Subgenres trên toàn bộ 12 thị trường.
-* **Shortlist & Export (P3):** Bookmark game vào danh sách xem xét, phân loại ưu tiên (`HIGH`, `MEDIUM`, `LOW`), gắn nhãn và xuất CSV chuẩn `utf-8-sig` (tương thích 100% Microsoft Excel tiếng Việt).
-* **Bảo toàn dữ liệu $0 & Immutability:** Lưu trữ SQLite WAL + Raw Store định danh nội dung (SHA-256), đảm bảo không bao giờ ghi đè lịch sử.
+* **Ma Trận Nhiệt Thị Trường (Heatmap):** Trực quan hóa phân bố subgenre giữa các thị trường có dữ liệu.
+* **Shortlist & Export (P3):** Bookmark game vào danh sách xem xét, phân loại ưu tiên (`HIGH`, `MEDIUM`, `LOW`), gắn nhãn và xuất CSV chuẩn `utf-8-sig` (hỗ trợ mở bằng Microsoft Excel với nội dung tiếng Việt).
+* **Lưu trữ và truy xuất bằng chứng:** SQLite ở chế độ WAL và raw store định danh nội dung bằng SHA-256 hỗ trợ kiểm tra lại dữ liệu nguồn.
 
 ---
 
@@ -73,7 +74,7 @@ casual_scout init --data-dir .\data
 # Thu thập Top 100 thị trường Việt Nam & Mỹ kèm metadata
 casual_scout collect --markets vn,us --data-dir .\data
 
-# Hoặc thu thập toàn bộ 11 thị trường
+# Hoặc thu thập 9 thị trường mặc định
 casual_scout collect --data-dir .\data
 ```
 
@@ -88,52 +89,14 @@ casual_scout serve --host 127.0.0.1 --port 8000 --data-dir .\data
 ```
 Truy cập [http://127.0.0.1:8000](http://127.0.0.1:8000) trên trình duyệt.
 
-Trên `/dashboard` và `/data`, **Crawl ngay** thu thập Top Free Casual iOS của **9 thị trường**: Việt Nam, Thái Lan, Indonesia, Malaysia, Philippines, Singapore, Lào, Campuchia và Mỹ. Nút crawl, lịch hằng ngày và lịch một lần trên `/data` dùng cùng nhóm này, không phụ thuộc bộ lọc xem dữ liệu. Sau crawl, hệ thống phân tích các thị trường có bản chụp hoàn chỉnh theo đúng ngày quan sát UTC; lỗi nguồn ở một nước vẫn được ghi rõ trong lượt chạy. Lịch 07:00 `Asia/Ho_Chi_Minh` tắt mặc định; bật bằng công tắc trên Dashboard. Lịch chỉ chạy khi lệnh `serve` và máy vẫn đang hoạt động, không chạy bù khi server tắt. Lịch đã bật/đặt trước sẽ dùng nhóm mới sau khi khởi động lại web; không tự bật lịch đang tắt. Android giữ nguyên phạm vi VN riêng.
+Trên `/dashboard` và `/data`, **Crawl ngay** thu thập Top Free Casual iOS của **9 thị trường**: Việt Nam, Thái Lan, Indonesia, Malaysia, Philippines, Singapore, Lào, Campuchia và Mỹ. Nút crawl, lịch hằng ngày và lịch một lần trên `/data` dùng cùng nhóm này, không phụ thuộc bộ lọc xem dữ liệu. Sau crawl, hệ thống phân tích các thị trường có bản chụp hoàn chỉnh theo đúng ngày quan sát UTC; lỗi nguồn ở một nước vẫn được ghi rõ trong lượt chạy. Lịch 07:00 `Asia/Ho_Chi_Minh` tắt mặc định; bật bằng công tắc trên Dashboard. Lịch chỉ chạy khi lệnh `serve` và máy vẫn đang hoạt động, không chạy bù khi server tắt. Lịch đã bật/đặt trước sẽ dùng nhóm mới sau khi khởi động lại web; không tự bật lịch đang tắt. Android dùng cùng chín thị trường, cả Top Free và Top Grossing, với lịch riêng.
 
 ---
 
 ## 💻 Tổng Hợp Toàn Bộ Lệnh CLI
 
-```mermaid
-flowchart TD
-    subgraph S1["1. Khởi Tạo (Chạy 1 lần)"]
-        INIT["casual_scout init\n(Tạo SQLite database & thư mục raw)"]
-    end
+Quy trình cơ bản: **khởi tạo → thu thập → phân tích → xem dashboard/radar → chọn game vào shortlist**. Có thể chạy khảo sát theo lịch và sao lưu dữ liệu như các bước vận hành độc lập.
 
-    subgraph S2["2. Thu Thập Dữ Liệu"]
-        COLLECT["casual_scout collect\n(Cào Top 100 11 thị trường + Metadata)"]
-        SURVEY["casual_scout survey\n(Chạy tự động 4 slot UTC ngầm)"]
-    end
-
-    subgraph S3["3. Phân Tích & Xu Hướng"]
-        ANALYZE["casual_scout analyze\n(Tính delta 1D/3D/7D & Taxonomy)"]
-        TRENDS["casual_scout trends\n(Tra cứu biến động rank & Signal)"]
-    end
-
-    subgraph S4["4. Radar Cơ Hội & Shortlist"]
-        STATS_O["casual_scout stats overview\n(Tỷ trọng Subgenre/Mechanic)"]
-        STATS_R["casual_scout stats radar\n(Bảng Opportunity Radar 0-100đ)"]
-        SHORTLIST["casual_scout shortlist add / list\n(Quản lý Bookmark & Ghi chú)"]
-    end
-
-    subgraph S5["5. Hiển Thị & Vận Hành"]
-        SERVE["casual_scout serve\n(Web Dashboard http://localhost:8000)"]
-        BACKUP["casual_scout backup / restore\n(Sao lưu & Phục hồi toàn vẹn)"]
-    end
-
-    INIT --> COLLECT
-    INIT --> SURVEY
-    COLLECT --> ANALYZE
-    SURVEY --> ANALYZE
-    ANALYZE --> TRENDS
-    ANALYZE --> STATS_O
-    ANALYZE --> STATS_R
-    STATS_R --> SHORTLIST
-    STATS_O --> SERVE
-    STATS_R --> SERVE
-    SHORTLIST --> SERVE
-    ANALYZE --> BACKUP
-```
 
 Cú pháp chung:
 ```bash
@@ -156,7 +119,7 @@ Kích hoạt tiến trình thu thập Top 100 bảng xếp hạng Apple RSS và 
 ```powershell
 casual_scout collect [--countries vn,us,th] [--no-enrich] [--data-dir <path>]
 ```
-* `--countries` / `--markets`: Danh sách mã quốc gia cách nhau bằng dấu phẩy (mặc định: toàn bộ 11 thị trường `vn,us,bn,kh,id,la,my,mm,ph,sg,th,tl`).
+* `--countries` / `--markets`: Danh sách mã quốc gia cách nhau bằng dấu phẩy (mặc định: `vn,th,id,my,ph,sg,la,kh,us`).
 * `--no-enrich`: Chỉ cào bảng xếp hạng RSS, bỏ qua bước gọi iTunes Lookup để lấy mô tả/đánh giá (giúp cào cực nhanh).
 
 #### `casual_scout serve`
@@ -203,7 +166,7 @@ Hiển thị tổng quan thị trường: tổng số game theo dõi, số lư�
 ```powershell
 casual_scout stats overview [--date YYYY-MM-DD] [--country all|vn|us] [--json] [--data-dir <path>]
 ```
-* `--country`: Mã quốc gia hoặc `all` để xem toàn bộ 11 thị trường.
+* `--country`: Mã quốc gia hoặc `all` để xem toàn bộ dữ liệu hiện có.
 * `--json`: Xuất kết quả dạng JSON.
 
 #### `casual_scout stats radar`
@@ -273,7 +236,7 @@ Khi chạy `casual_scout serve`, bạn có thể truy cập các trang chuyên d
 1. **`/dashboard` (Tổng quan & Opportunity Radar)**:
    * **KPIs Cards**: Thống kê số lượng game Top, Hot Waves, Fast Risers và Shortlist.
    * **Bảng Opportunity Radar**: Xếp hạng cơ hội theo thuật toán P3, hiển thị điểm thành phần (Tăng trưởng, Độ phủ, Thứ hạng), huy hiệu cơ hội và nút Quick Add vào Shortlist.
-   * **Ma trận nhiệt thị trường (Heatmap)**: Đối chiếu sự phổ biến của từng dòng game qua 12 quốc gia.
+   * **Ma trận nhiệt thị trường (Heatmap)**: Đối chiếu sự phổ biến của từng dòng game giữa các thị trường có dữ liệu.
    * **Biểu đồ phân bố Subgenres & Mechanics**: Biểu đồ trực quan xây dựng trên Chart.js.
 
 2. **`/shortlist` (Quản lý ứng viên game)**:
@@ -327,37 +290,47 @@ data/
 
 ## 🧪 Chạy Kiểm Thử Tự Động (Test Suite)
 
-Dự án được bao phủ 100% bởi bộ kiểm thử tự động (Unit, Integration, Acceptance Tests):
+Dự án có bộ kiểm thử tự động (unit, integration và acceptance):
 ```powershell
 pytest -v
 ```
-*(Kết quả: 111/111 tests pass)*
+Số lượng và kết quả kiểm thử có thể thay đổi theo phiên bản; chạy lệnh trên để xem trạng thái hiện tại.
 
 ---
 
-## Android VN — crawl và phân tích theo batch
+## Android — HTTP crawl và phân tích đa thị trường
 
-Mở `/android` từ thanh điều hướng hoặc từ `/data`. Nút **Crawl Android ngay** lấy
-Top Free và Top Grossing Casual VN, hiển thị thứ hạng trước, rồi bổ sung metadata
-và phân tích theo batch 5 game. Trang tự cập nhật mỗi 2 giây và thích ứng điện thoại.
+Chọn Android trên `/data` hoặc `/dashboard?platform=android`. Nút **Crawl Android** lấy
+Top Free và Top Grossing Casual ở VN, TH, ID, MY, PH, SG, LA, KH và US.
+Chart dùng HTTP POST Google Play RPC; metadata dùng HTTP GET trang chi tiết, tối đa
+10 request đồng thời. Không cần Chrome, ChromeDriver hoặc Selenium.
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -e ".[android]"
+.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m casual_scout collect --platform android --chart-type all --data-dir .\data
+.\.venv\Scripts\python.exe -m casual_scout analyze --platform android --data-dir .\data
+.\.venv\Scripts\python.exe -m casual_scout stats radar --platform android --data-dir .\data
 .\.venv\Scripts\python.exe -m casual_scout.cli serve --host 127.0.0.1 --port 8000 --data-dir .\data
 ```
 
-Cần Chrome đã cài. Selenium tự tìm ChromeDriver tương thích; cache nằm trong
-`data/selenium-cache`. Không cần mở cửa sổ Chrome khi crawl.
+`collect --platform all` chạy iOS trước, Android sau. iOS vẫn là mặc định.
+`--markets vn,us` giới hạn thị trường; `--chart-type top-free` hoặc `top-grossing`
+giới hạn feed. Dashboard, API và CLI dùng chung core database và worker HTTP.
 
-- Lịch Android 07:00 giờ Việt Nam mặc định tắt; bật bằng checkbox trên `/android`.
-  Server phải chạy; Android chờ collector iOS rảnh. Lịch iOS một lần vẫn hoạt động.
+- Lịch Android 07:00 giờ Việt Nam mặc định tắt; bật trên dashboard Android hoặc `/android`.
+  Server phải chạy và collector phải rảnh trong phút 07:00; Android không chạy bù
+  sau khi iOS kết thúc muộn. Lịch iOS một lần vẫn hoạt động.
 - Dữ liệu đã xử lý giữ nguyên khi một game lỗi hoặc worker gián đoạn. Bấm crawl
-  lại để tạo lượt mới; metadata thành công được tái dùng tối đa 48 giờ.
+  lại để tạo lượt mới; metadata hoàn chỉnh được tái dùng dưới 48 giờ theo đúng quốc gia.
 - Thứ hạng lấy mới mỗi run; số lượng game là số thực thu, không cam kết Top 100.
   Developer là tên niêm yết. Top Grossing không phải số tiền doanh thu.
-- Android có trang phân tích riêng, chưa gộp vào dashboard/shortlist iOS.
-- Evidence HTML/PNG/manifest: `data/android-evidence/<run-id>/`;
-  log worker: `data/logs/android-<run-id>.log`.
+- Chart dưới 100 game được ghi `partial`; các thứ hạng quan sát được vẫn tham gia phân tích,
+  không suy diễn game mới từ phần chart chưa quan sát. Google có thể trả Grossing dưới 100.
+- Android hỗ trợ radar v1.5, installs badges và lịch sử Free/Grossing 14 ngày. Shortlist
+  và AI hiện chỉ hỗ trợ iOS. `/android` giữ lịch sử legacy; crawl mới đi qua core HTTP.
+- HTTP raw evidence lưu trong `data/raw/`; run và lỗi từng chart xem tại `/runs`.
+- Các script browser probe/UI cũ chỉ là công cụ nghiên cứu lịch sử tùy chọn, cần
+  `scripts/requirements-google-play-probe.txt` riêng; runtime HTTP không sử dụng chúng.
 
 Để thử qua Wi-Fi, cấu hình đúng IP máy tính (ví dụ dưới đây); Windows Firewall
 cần cho phép cổng sử dụng trên mạng nội bộ:
@@ -367,7 +340,7 @@ $env:CASUAL_SCOUT_LAN_HOSTS = '192.168.1.4'
 .\.venv\Scripts\python.exe -m casual_scout.cli serve --host 0.0.0.0 --port 8002 --data-dir .\data
 ```
 
-Đánh giá triển khai: [Android live batches](docs/operations/2026-09-24-android-live-batches-acceptance.md).
+Đánh giá triển khai: [Android HTTP acceptance](docs/operations/2026-09-29-android-plan-completion.md).
 
 ## Gemini Free Tier pilot (manual AI evaluation)
 
@@ -393,5 +366,6 @@ shortlist notes or local files. The application cannot verify your account's bil
 or guarantee zero charges. Token usage is not an invoice, so actual cost remains unknown.
 AI recommendations are a pilot result requiring human quality review before decisions.
 
-## 📄 Bản Quyền
-Phát triển cho mục đích Nghiên cứu & Phân tích Thị trường Casual Games — ASOL. Giấy phép MIT.
+## Bản quyền
+
+Phát triển cho mục đích nghiên cứu và phân tích thị trường casual games tại ASOL. Chưa có tệp giấy phép trong repository; cần xác nhận điều khoản trước khi phân phối ra ngoài.

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 from contextlib import closing
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from datetime import date as calendar_date
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -12,7 +13,6 @@ from casual_scout.analysis.monetization import (
 )
 from casual_scout.analysis.taxonomy import classify_app
 from casual_scout.config import IOS_COLLECTION_COUNTRIES
-from casual_scout.models import Chart
 from casual_scout.stats.aggregator import (
     build_market_heatmap,
     compute_7day_subgenre_trends,
@@ -20,6 +20,7 @@ from casual_scout.stats.aggregator import (
     compute_mechanic_distribution,
 )
 from casual_scout.stats.noteworthy import noteworthy_for_date, observed_charts, presence
+from casual_scout.stats.radar import rank_opportunities
 from casual_scout.stats.shortlist import ShortlistService
 from casual_scout.storage import Repository
 
@@ -57,6 +58,10 @@ def get_data_view(
     *,
     platform: str = "ios",
 ) -> dict:
+    if platform not in ("ios", "android"):
+        raise ValueError("unsupported platform")
+    if date:
+        calendar_date.fromisoformat(date)
     country = country.lower()
     feed_type_norm = (
         "top-grossing"
@@ -65,20 +70,16 @@ def get_data_view(
     )
     if platform == "android":
         collection = feed_type_norm
-        provider = "google"
-        genre = "GAME_CASUAL"
     else:
-        collection = "topgrossingapplications" if feed_type_norm == "top-grossing" else "topfreeapplications"
-        provider = "apple"
-        genre = "7003"
+        collection = (
+            "topgrossingapplications" if feed_type_norm == "top-grossing" else "topfreeapplications"
+        )
 
     markets = get_markets(repo)
     current_market = next((m for m in markets if m["country"] == country), None)
     if current_market is None:
         country = "vn"
         current_market = next((m for m in markets if m["country"] == "vn"), None)
-
-    chart = Chart(country, provider=provider, platform=platform, genre=genre, feed_type=feed_type_norm)
 
     with closing(repo._connect()) as conn:
         snaps = conn.execute(
@@ -88,10 +89,11 @@ def get_data_view(
             JOIN market_runs mr ON mr.id = s.market_run_id
             JOIN charts c ON c.id = mr.chart_id
             WHERE c.country = ? AND c.platform = ? AND c.collection = ?
+              AND (? IS NULL OR substr(s.observed_at,1,10) = ?)
             ORDER BY s.observed_at DESC
             LIMIT 50
             """,
-            (country, platform, collection),
+            (country, platform, collection, date, date),
         ).fetchall()
         snapshots_list = [
             {
@@ -108,14 +110,20 @@ def get_data_view(
         try:
             selected_snapshot = repo.get_snapshot(snapshot_id)
         except (KeyError, ValueError):
-            selected_snapshot = None
+            raise KeyError(snapshot_id) from None
+        identity = selected_snapshot["chart"]
+        if (identity["platform"], identity["country"], identity["collection"]) != (
+            platform,
+            country,
+            collection,
+        ):
+            raise ValueError("snapshot does not match selected platform, market and feed")
 
     if selected_snapshot is None and snapshots_list:
-        latest = repo.latest_complete(chart)
-        if latest is not None:
-            selected_snapshot = latest
-        elif snapshots_list:
-            selected_snapshot = repo.get_snapshot(snapshots_list[0]["id"])
+        eligible = [s for s in snapshots_list if not date or s["observed_at"][:10] == date]
+        if eligible:
+            preferred = next((s for s in eligible if s["quality"] == "complete"), eligible[0])
+            selected_snapshot = repo.get_snapshot(preferred["id"])
 
     entries_data = []
     counts = {
@@ -127,9 +135,7 @@ def get_data_view(
     }
 
     if selected_snapshot is not None:
-        selected_snapshot["observed_at_vn"] = format_vn_time(
-            selected_snapshot.get("observed_at")
-        )
+        selected_snapshot["observed_at_vn"] = format_vn_time(selected_snapshot.get("observed_at"))
         snap_id = selected_snapshot["id"]
 
         with closing(repo._connect()) as conn:
@@ -147,16 +153,11 @@ def get_data_view(
                 LEFT JOIN snapshot_metadata sm ON sm.snapshot_id = e.snapshot_id AND sm.app_id = e.app_id
                 LEFT JOIN metadata_versions mv ON mv.id = sm.metadata_version_id
                 LEFT JOIN daily_rank_analytics dra ON dra.app_id = e.app_id AND dra.country = ? AND dra.platform = ?
-                     AND dra.date = (
-                         SELECT date FROM platform_canonical_snapshots WHERE snapshot_id = ?
-                         UNION
-                         SELECT date FROM daily_canonical_snapshots WHERE snapshot_id = ?
-                         LIMIT 1
-                     )
+                     AND dra.date = ?
                 WHERE e.snapshot_id = ?
                 ORDER BY e.rank ASC
             """
-            params = [country, platform, snap_id, snap_id, snap_id]
+            params = [country, platform, selected_snapshot["observed_at"][:10], snap_id]
             rows = conn.execute(query, params).fetchall()
 
             for r in rows:
@@ -168,13 +169,13 @@ def get_data_view(
                     if row_dict.get("genres_json"):
                         try:
                             genres = json.loads(row_dict["genres_json"])
-                        except Exception:
-                            pass
+                        except (json.JSONDecodeError, TypeError):
+                            genres = []
                     if not genres and row_dict.get("source_genres_json"):
                         try:
                             genres = json.loads(row_dict["source_genres_json"])
-                        except Exception:
-                            pass
+                        except (json.JSONDecodeError, TypeError):
+                            genres = []
 
                     classified = classify_app(
                         genres,
@@ -196,18 +197,33 @@ def get_data_view(
                     row_dict["cross_markets"] = [country]
 
                 # Monetization model fallback
-                if not row_dict.get("monetization_model") or row_dict.get("monetization_model") == "UNKNOWN":
+                if (
+                    not row_dict.get("monetization_model")
+                    or row_dict.get("monetization_model") == "UNKNOWN"
+                ):
                     iap_list = []
                     if row_dict.get("in_app_purchases_json"):
                         try:
                             iap_list = json.loads(row_dict["in_app_purchases_json"])
-                        except Exception:
-                            pass
-                    free_r = row_dict.get("free_rank") or (row_dict.get("rank") if feed_type_norm == "top-free" else None)
-                    gross_r = row_dict.get("grossing_rank") or (row_dict.get("rank") if feed_type_norm == "top-grossing" else None)
+                        except (json.JSONDecodeError, TypeError):
+                            iap_list = []
+                    free_r = row_dict.get("free_rank") or (
+                        row_dict.get("rank") if feed_type_norm == "top-free" else None
+                    )
+                    gross_r = row_dict.get("grossing_rank") or (
+                        row_dict.get("rank") if feed_type_norm == "top-grossing" else None
+                    )
                     if platform == "android":
-                        has_ads = bool(row_dict.get("has_ads")) if row_dict.get("has_ads") is not None else None
-                        has_iap = bool(row_dict.get("has_iap")) if row_dict.get("has_iap") is not None else None
+                        has_ads = (
+                            bool(row_dict.get("has_ads"))
+                            if row_dict.get("has_ads") is not None
+                            else None
+                        )
+                        has_iap = (
+                            bool(row_dict.get("has_iap"))
+                            if row_dict.get("has_iap") is not None
+                            else None
+                        )
                         row_dict["monetization_model"] = classify_android_monetization(
                             price=row_dict.get("price"),
                             has_ads=has_ads,
@@ -248,7 +264,7 @@ def get_data_view(
                 if row_dict.get("signal_reasons_json"):
                     try:
                         row_dict["signal_reasons"] = json.loads(row_dict["signal_reasons_json"])
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError):
                         row_dict["signal_reasons"] = []
                 else:
                     row_dict["signal_reasons"] = []
@@ -256,8 +272,12 @@ def get_data_view(
                 if row_dict.get("cross_markets_json"):
                     try:
                         parsed_cm = json.loads(row_dict["cross_markets_json"])
-                        row_dict["cross_markets"] = [str(m).upper() for m in parsed_cm if m] if parsed_cm else [country.upper()]
-                    except Exception:
+                        row_dict["cross_markets"] = (
+                            [str(m).upper() for m in parsed_cm if m]
+                            if parsed_cm
+                            else [country.upper()]
+                        )
+                    except (json.JSONDecodeError, TypeError):
                         row_dict["cross_markets"] = [country.upper()]
                 else:
                     row_dict["cross_markets"] = [country.upper()]
@@ -276,10 +296,10 @@ def get_data_view(
 
                 entries_data.append(row_dict)
 
-    available_dates = repo.get_available_analytics_dates()
+    available_dates = repo.get_available_analytics_dates(platform=platform)
     if selected_snapshot:
         observation_day = selected_snapshot["observed_at"][:10]
-        charts = observed_charts(repo, observation_day, collection)
+        charts = observed_charts(repo, observation_day, collection, platform=platform)
         for entry in entries_data:
             entry.update(presence(entry["app_id"], charts))
             entry["cross_market_count"] = entry["presence_count"]
@@ -289,7 +309,7 @@ def get_data_view(
         "country": country,
         "feed_type": feed_type_norm,
         "current_market": current_market,
-        "markets": [m for m in markets if m['country'] in IOS_COLLECTION_COUNTRIES],
+        "markets": [m for m in markets if m["country"] in IOS_COLLECTION_COUNTRIES],
         "legacy_market": current_market if country not in IOS_COLLECTION_COUNTRIES else None,
         "snapshots": snapshots_list,
         "selected_snapshot": selected_snapshot,
@@ -305,7 +325,7 @@ def get_data_view(
 def get_game_view(
     repo: Repository,
     app_id: str,
-    country: str = 'vn',
+    country: str = "vn",
     snapshot_id: str | None = None,
     *,
     platform: str | None = None,
@@ -313,7 +333,13 @@ def get_game_view(
     country = country.lower()
     if not platform:
         platform = "android" if ("." in app_id and not app_id.isdigit()) else "ios"
-    provider = "google" if platform == "android" else "apple"
+    if platform not in ("ios", "android"):
+        raise ValueError("unsupported platform")
+    if snapshot_id:
+        snapshot = repo.get_snapshot(snapshot_id)
+        identity = snapshot["chart"]
+        if (identity["platform"], identity["country"]) != (platform, country):
+            raise ValueError("snapshot does not match game scope")
 
     with closing(repo._connect()) as conn:
         meta_row = None
@@ -327,26 +353,6 @@ def get_game_view(
                 (snapshot_id, app_id),
             ).fetchone()
 
-        if meta_row is None:
-            meta_row = conn.execute(
-                """
-                SELECT * FROM metadata_versions
-                WHERE provider = ? AND platform = ? AND country = ? AND app_id = ?
-                ORDER BY fetched_at DESC LIMIT 1
-                """,
-                (provider, platform, country, app_id),
-            ).fetchone()
-
-        if meta_row is None:
-            meta_row = conn.execute(
-                """
-                SELECT * FROM metadata_versions
-                WHERE provider = ? AND platform = ? AND app_id = ?
-                ORDER BY fetched_at DESC LIMIT 1
-                """,
-                (provider, platform, app_id),
-            ).fetchone()
-
         entry_row = None
         if snapshot_id:
             entry_row = conn.execute(
@@ -354,24 +360,30 @@ def get_game_view(
                 (snapshot_id, app_id),
             ).fetchone()
 
-        if entry_row is None:
+        if entry_row is None and not snapshot_id:
             entry_row = conn.execute(
                 """
                 SELECT e.* FROM entries e
                 JOIN snapshots s ON s.id = e.snapshot_id
                 JOIN market_runs mr ON mr.id = s.market_run_id
                 JOIN charts c ON c.id = mr.chart_id
-                WHERE e.app_id = ? AND c.country = ?
+                WHERE e.app_id = ? AND c.country = ? AND c.platform = ?
                 ORDER BY s.observed_at DESC LIMIT 1
                 """,
-                (app_id, country),
+                (app_id, country, platform),
             ).fetchone()
 
-        if entry_row is None:
-            entry_row = conn.execute(
-                "SELECT * FROM entries WHERE app_id = ? ORDER BY rowid DESC LIMIT 1",
-                (app_id,),
+        if entry_row is not None and not snapshot_id:
+            meta_row = conn.execute(
+                """SELECT mv.* FROM snapshot_metadata sm
+                JOIN metadata_versions mv ON mv.id=sm.metadata_version_id
+                WHERE sm.snapshot_id=? AND sm.app_id=?""",
+                (entry_row["snapshot_id"], app_id),
             ).fetchone()
+
+        if entry_row is None and meta_row is None:
+            return None
+        entry_row = dict(entry_row) if entry_row else None
 
         meta_dict = dict(meta_row) if meta_row else {}
         if meta_dict.get("fetched_at"):
@@ -379,22 +391,41 @@ def get_game_view(
         if meta_dict.get("genres_json"):
             try:
                 meta_dict["genres"] = json.loads(meta_dict["genres_json"])
-            except Exception:
+            except (json.JSONDecodeError, TypeError):
                 meta_dict["genres"] = []
         else:
             meta_dict["genres"] = []
 
-        rank_history = repo.get_app_rank_history(app_id, country, limit=14, platform=platform)
+        observation = conn.execute(
+            """SELECT s.observed_at, c.collection FROM snapshots s
+            JOIN market_runs mr ON mr.id=s.market_run_id
+            JOIN charts c ON c.id=mr.chart_id WHERE s.id=?""",
+            (entry_row["snapshot_id"] if entry_row else snapshot_id,),
+        ).fetchone()
+        end_day = (
+            calendar_date.fromisoformat(observation["observed_at"][:10])
+            if observation
+            else datetime.now(UTC).date()
+        )
+        first_day = end_day - timedelta(days=13)
+        rank_history = [
+            dict(row)
+            for row in conn.execute(
+                """SELECT * FROM daily_rank_analytics WHERE app_id=? AND country=? AND platform=?
+               AND date BETWEEN ? AND ? ORDER BY date DESC LIMIT 14""",
+                (app_id, country, platform, first_day.isoformat(), end_day.isoformat()),
+            ).fetchall()
+        ]
 
         latest_analytics = None
         if rank_history:
             an_row = conn.execute(
                 """
                 SELECT * FROM daily_rank_analytics
-                WHERE app_id = ? AND country = ? AND platform = ?
+                WHERE app_id = ? AND country = ? AND platform = ? AND date = ?
                 ORDER BY date DESC LIMIT 1
                 """,
-                (app_id, country, platform),
+                (app_id, country, platform, end_day.isoformat()),
             ).fetchone()
             if an_row:
                 latest_analytics = dict(an_row)
@@ -416,7 +447,7 @@ def get_game_view(
             if not genres and entry_row and entry_row.get("source_genres_json"):
                 try:
                     genres = json.loads(entry_row["source_genres_json"])
-                except Exception:
+                except (json.JSONDecodeError, TypeError):
                     genres = []
 
             classified = classify_app(genres, title, desc)
@@ -428,26 +459,55 @@ def get_game_view(
                 "signal": "STEADY",
                 "signal_reasons": [],
             }
-        observation = conn.execute(
-            """SELECT s.observed_at, c.collection FROM snapshots s
-            JOIN market_runs mr ON mr.id=s.market_run_id
-            JOIN charts c ON c.id=mr.chart_id WHERE s.id=?""",
-            (entry_row["snapshot_id"] if entry_row else None,),
-        ).fetchone()
-        charts = observed_charts(repo, observation["observed_at"][:10], observation["collection"]) if observation else {}
+        charts = (
+            observed_charts(
+                repo, observation["observed_at"][:10], observation["collection"], platform=platform
+            )
+            if observation
+            else {}
+        )
         latest_analytics.update(presence(app_id, charts))
         latest_analytics["cross_market_count"] = latest_analytics["presence_count"]
         latest_analytics["cross_markets"] = latest_analytics["presence_markets"]
         latest_analytics["presence_day"] = observation["observed_at"][:10] if observation else None
 
+        history_rows = conn.execute(
+            """SELECT substr(s.observed_at,1,10) AS day, c.collection, e.rank
+            FROM entries e JOIN snapshots s ON s.id=e.snapshot_id
+            JOIN market_runs mr ON mr.id=s.market_run_id JOIN charts c ON c.id=mr.chart_id
+            WHERE e.app_id=? AND c.platform=? AND c.country=?
+              AND substr(s.observed_at,1,10) BETWEEN ? AND ?
+              AND s.quality IN ('complete','partial')
+            ORDER BY s.observed_at ASC, s.id ASC""",
+            (app_id, platform, country, first_day.isoformat(), end_day.isoformat()),
+        ).fetchall()
+        daily_ranks = {}
+        for row in history_rows:
+            key = "grossing_rank" if "grossing" in row["collection"] else "free_rank"
+            daily_ranks.setdefault(row["day"], {})[key] = row["rank"]
+        chart_history = [
+            {
+                "date": (first_day + timedelta(days=n)).isoformat(),
+                "free_rank": None,
+                "grossing_rank": None,
+            }
+            for n in range(14)
+        ]
+        for row in chart_history:
+            row.update(daily_ranks.get(row["date"], {}))
+
         return {
             "app_id": app_id,
             "country": country,
             "platform": platform,
+            "feed_type": "top-grossing"
+            if observation and "grossing" in observation["collection"]
+            else "top-free",
             "snapshot_id": snapshot_id,
             "entry": dict(entry_row) if entry_row else {},
             "metadata": meta_dict,
             "rank_history": rank_history,
+            "chart_history": chart_history,
             "analytics": latest_analytics,
         }
 
@@ -492,7 +552,7 @@ def get_run_detail_view(repo: Repository, run_id: str) -> dict | None:
 
         mr_rows = conn.execute(
             """
-            SELECT mr.*, c.country, m.name as market_name, m.name as country_name, s.id as snapshot_id, s.quality
+            SELECT mr.*, c.country, c.platform, c.collection, m.name as market_name, m.name as country_name, s.id as snapshot_id, s.quality
             FROM market_runs mr
             JOIN charts c ON c.id = mr.chart_id
             JOIN markets m ON m.country = c.country
@@ -514,7 +574,6 @@ def get_run_detail_view(repo: Repository, run_id: str) -> dict | None:
         return {"run": run_dict, "market_runs": market_runs}
 
 
-
 def get_dashboard_view(
     repo: Repository,
     date_str: str | None = None,
@@ -527,64 +586,59 @@ def get_dashboard_view(
         date_str = available_dates[0] if available_dates else datetime.now(UTC).strftime("%Y-%m-%d")
 
     all_markets = get_markets(repo)
-    markets = [m for m in all_markets if m['country'] in IOS_COLLECTION_COUNTRIES]
+    markets = [m for m in all_markets if m["country"] in IOS_COLLECTION_COUNTRIES]
     country = country.lower()
-    legacy_market = next((m for m in all_markets
-                          if m['country'] == country and country not in IOS_COLLECTION_COUNTRIES), None)
-    scope = IOS_COLLECTION_COUNTRIES if country == 'all' else (country,)
-    scope_params = ','.join('?' for _ in scope)
+    legacy_market = next(
+        (
+            m
+            for m in all_markets
+            if m["country"] == country and country not in IOS_COLLECTION_COUNTRIES
+        ),
+        None,
+    )
+    scope = IOS_COLLECTION_COUNTRIES if country == "all" else (country,)
+    scope_params = ",".join("?" for _ in scope)
     shortlist_service = ShortlistService(repo)
     shortlist_items = shortlist_service.list_shortlists()
     shortlisted_ids = {it["app_id"] for it in shortlist_items}
 
     with closing(repo._connect()) as conn:
-        if country.lower() == "all":
-            rows = conn.execute(
-                f"""
-                SELECT dra.*,
-                       COALESCE(
-                           (SELECT name FROM metadata_versions mv WHERE mv.app_id = dra.app_id AND mv.country = dra.country ORDER BY fetched_at DESC LIMIT 1),
-                           (SELECT name FROM entries e WHERE e.app_id = dra.app_id LIMIT 1),
-                           dra.app_id
-                       ) AS title,
-                       COALESCE(
-                           (SELECT developer FROM metadata_versions mv WHERE mv.app_id = dra.app_id AND mv.country = dra.country ORDER BY fetched_at DESC LIMIT 1),
-                           ''
-                       ) AS developer,
-                       (SELECT icon_url FROM entries e WHERE e.app_id = dra.app_id LIMIT 1) AS icon_url
-                FROM daily_rank_analytics dra
-                WHERE dra.date = ? AND dra.platform = ? AND dra.country IN ({scope_params})
-                ORDER BY dra.current_rank ASC
-                """,
-                (date_str, platform, *scope),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """
-                SELECT dra.*,
-                       COALESCE(
-                           (SELECT name FROM metadata_versions mv WHERE mv.app_id = dra.app_id AND mv.country = dra.country ORDER BY fetched_at DESC LIMIT 1),
-                           (SELECT name FROM entries e WHERE e.app_id = dra.app_id LIMIT 1),
-                           dra.app_id
-                       ) AS title,
-                       COALESCE(
-                           (SELECT developer FROM metadata_versions mv WHERE mv.app_id = dra.app_id AND mv.country = dra.country ORDER BY fetched_at DESC LIMIT 1),
-                           ''
-                       ) AS developer,
-                       (SELECT icon_url FROM entries e WHERE e.app_id = dra.app_id LIMIT 1) AS icon_url
-                FROM daily_rank_analytics dra
-                WHERE dra.date = ? AND dra.platform = ? AND dra.country = ?
-                ORDER BY dra.current_rank ASC
-                """,
-                (date_str, platform, country.lower()),
-            ).fetchall()
+        rows = conn.execute(
+            f"""
+            SELECT dra.*, COALESCE(mv.name,e.name,dra.app_id) AS title,
+                   COALESCE(mv.developer,e.developer,'') AS developer, e.icon_url
+            FROM daily_rank_analytics dra
+            LEFT JOIN snapshots selected ON selected.id = COALESCE(
+                (SELECT pcs.snapshot_id FROM platform_canonical_snapshots pcs
+                 WHERE pcs.date=dra.date AND pcs.platform=dra.platform AND pcs.country=dra.country
+                   AND pcs.feed_type=CASE WHEN dra.free_rank IS NULL AND dra.grossing_rank IS NOT NULL
+                                         THEN 'top-grossing' ELSE 'top-free' END),
+                (SELECT s.id FROM snapshots s
+                 JOIN market_runs mr ON mr.id=s.market_run_id JOIN charts c ON c.id=mr.chart_id
+                 JOIN entries candidate ON candidate.snapshot_id=s.id AND candidate.app_id=dra.app_id
+                 WHERE c.platform=dra.platform AND c.country=dra.country
+                   AND substr(s.observed_at,1,10)=dra.date AND s.quality IN ('complete','partial')
+                 ORDER BY (s.quality='complete') DESC,s.observed_at DESC,s.id DESC LIMIT 1)
+            )
+            LEFT JOIN entries e ON e.snapshot_id=selected.id AND e.app_id=dra.app_id
+            LEFT JOIN snapshot_metadata sm ON sm.snapshot_id=selected.id AND sm.app_id=dra.app_id
+            LEFT JOIN metadata_versions mv ON mv.id=sm.metadata_version_id
+            WHERE dra.date = ? AND dra.platform = ? AND dra.country IN ({scope_params})
+            ORDER BY dra.current_rank ASC
+            """,
+            (date_str, platform, *scope),
+        ).fetchall()
 
         records = []
         records_by_country: dict[str, list[dict]] = {}
         for r in rows:
             d = dict(r)
-            d["signal_reasons"] = json.loads(d["signal_reasons_json"]) if d.get("signal_reasons_json") else []
-            d["cross_markets"] = json.loads(d["cross_markets_json"]) if d.get("cross_markets_json") else []
+            d["signal_reasons"] = (
+                json.loads(d["signal_reasons_json"]) if d.get("signal_reasons_json") else []
+            )
+            d["cross_markets"] = (
+                json.loads(d["cross_markets_json"]) if d.get("cross_markets_json") else []
+            )
             records.append(d)
             c = d["country"]
             if c not in records_by_country:
@@ -621,9 +675,36 @@ def get_dashboard_view(
     heatmap = build_market_heatmap(records_by_country)
     trends = compute_7day_subgenre_trends(history_records)
     radar_items = noteworthy_for_date(
-        repo, records, date_str, shortlisted_ids,
+        repo,
+        records,
+        date_str,
+        shortlisted_ids,
         markets=(*IOS_COLLECTION_COUNTRIES, country) if legacy_market else IOS_COLLECTION_COUNTRIES,
+        platform=platform,
     )
+    if platform == "android":
+        discovery = {row["app_id"]: row for row in radar_items}
+        scored = rank_opportunities(records)
+        for row in scored:
+            details = discovery.get(row["app_id"], {})
+            row.update(
+                {
+                    key: value
+                    for key, value in details.items()
+                    if key.startswith(
+                        (
+                            "presence_",
+                            "observed_",
+                            "noteworthy",
+                            "rising_",
+                            "new_entry_",
+                            "comparable_",
+                            "comparison_",
+                        )
+                    )
+                }
+            )
+        radar_items = scored
 
     top_genre = None
     if genre_dist.get("breakdown"):
@@ -671,14 +752,14 @@ def get_dashboard_view(
             "ended_at_vn": format_vn_time(str(latest_collection["ended_at"]))
             if latest_collection and latest_collection["ended_at"]
             else None,
-            "valid_count": int(latest_collection["valid_count"] or 0)
-            if latest_collection
-            else 0,
+            "valid_count": int(latest_collection["valid_count"] or 0) if latest_collection else 0,
         },
     }
 
 
-def get_shortlist_view(repo: Repository, status: str | None = None, priority: str | None = None) -> dict[str, Any]:
+def get_shortlist_view(
+    repo: Repository, status: str | None = None, priority: str | None = None
+) -> dict[str, Any]:
     service = ShortlistService(repo)
     items = service.list_shortlists(status=status, priority=priority)
     return {

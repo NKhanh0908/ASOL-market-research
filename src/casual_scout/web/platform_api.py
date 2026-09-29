@@ -1,15 +1,17 @@
 """Platform-scoped REST APIs for data, opportunity radar, and background crawls."""
+
 from __future__ import annotations
 
-from typing import Any, Callable, Literal
+from datetime import date as Date
+from typing import Any, Literal
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 
-from casual_scout.collection.jobs import JobService
+from casual_scout.collection.jobs import CollectionBusyError, JobService
 from casual_scout.storage import Repository
-from casual_scout.web.views import get_dashboard_view, get_data_view
+from casual_scout.web.views import get_data_view
 
 
 class CrawlRequest(BaseModel):
@@ -33,7 +35,8 @@ class CrawlRequest(BaseModel):
 
 def create_platform_router(
     repo: Repository,
-    launcher: Callable[[str, str], int] | None = None,
+    launcher=None,
+    security=None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["Platform API"])
 
@@ -41,8 +44,8 @@ def create_platform_router(
     def get_api_data(
         platform: Literal["ios", "android"] = "ios",
         country: str = "vn",
-        feed_type: str = "top-free",
-        date: str | None = None,
+        feed_type: Literal["top-free", "top-grossing"] = "top-free",
+        date: Date | None = None,
     ) -> dict[str, Any]:
         """Query top 100 casual game rankings and metadata for a given platform and country."""
         country_norm = country.lower().strip()
@@ -57,7 +60,7 @@ def create_platform_router(
             repo,
             country=country_norm,
             feed_type=feed_type,
-            date=date,
+            date=date.isoformat() if date else None,
             platform=platform,
         )
         return {
@@ -68,23 +71,18 @@ def create_platform_router(
             "entries": data.get("entries", []),
         }
 
-    @router.get("/stats/radar")
-    def get_api_radar(
-        platform: Literal["ios", "android"] = "ios",
-        country: str = "vn",
-        date: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """Query opportunity radar ranking games for a given platform and country."""
-        country_norm = country.lower().strip()
-        data = get_dashboard_view(repo, date_str=date, country=country_norm, platform=platform)
-        return data.get("radar_items", [])
-
     @router.post("/crawl", status_code=status.HTTP_200_OK)
     def trigger_crawl(
         request: Request,
         crawl_req: CrawlRequest,
     ) -> dict[str, Any]:
         """Trigger an asynchronous background collection run for the selected platform."""
+        if security is None or not security.validate_csrf_token(
+            request.headers.get("X-CSRF-Token", ""), request.cookies.get("session_id", "")
+        ):
+            raise HTTPException(403, "Invalid CSRF token")
+        if (repo.data_dir / "MOCK_DATA.json").exists():
+            raise HTTPException(403, "Mock demo is read-only")
         chart_types = None
         if crawl_req.chart_type == "free":
             chart_types = ["top-free"]
@@ -97,16 +95,23 @@ def create_platform_router(
         idempotency_key = request.headers.get("Idempotency-Key") or str(uuid4())
         req_key = f"web-api-{crawl_req.platform}-{idempotency_key}"
 
-        run_id = jobs.submit(
-            trigger="manual",
-            countries=crawl_req.markets,
-            request_key=req_key,
-            chart_types=chart_types,
-            platform=crawl_req.platform,
-        )
-
-        if launcher:
-            launcher(run_id, str(repo.data_dir))
+        try:
+            run_id = jobs.submit(
+                "manual",
+                crawl_req.markets,
+                req_key,
+                chart_types=chart_types,
+                platform=crawl_req.platform,
+            )
+        except CollectionBusyError as error:
+            raise HTTPException(409, str(error)) from error
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        try:
+            if launcher:
+                jobs.launch(run_id, launcher)
+        except Exception as error:
+            raise HTTPException(503, "Worker launch failed") from error
 
         return {
             "run_id": run_id,

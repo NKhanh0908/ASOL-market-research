@@ -10,6 +10,22 @@
 
 **Spec:** [SPEC-AND-02](../specs/2026-09-28-android-storage-schema-evolution-spec.md)
 
+## Execution status — 2026-09-29
+
+Authoritative progress: [storage acceptance](../../operations/2026-09-28-android-core-storage-acceptance.md).
+Original step recipes below are retained; RED and commit commands are not retroactively
+claimed as individual executions. Work is consolidated on `feat/android-http-plan-completion`.
+
+- [x] Tasks 1–2: identity/schema migration, installs, immutable snapshot bindings verified.
+- [x] Task 3: core Android collection, incremental persistence, errors, interruption and heartbeat verified.
+- [x] Task 4: complete same-country metadata cache expires at exactly 48 hours; partial refetched.
+- [x] Task 5: free/grossing union, same-feed deltas, platform isolation and monetization verified.
+- [x] Task 6: mixed-platform backup/restore, hash/FK preservation and acceptance report delivered.
+
+Observed partial Android charts can be analyzed without marking them complete; a partial
+historical baseline cannot prove NEW_ENTRY. Existing iOS behavior is regression-tested.
+Live source/speed acceptance remains tracked in the HTTP plan.
+
 ## Global Constraints
 
 - “Bất biến (Immutability)”: snapshot, entries, metadata versions và bindings đã ghi không sửa/xóa.

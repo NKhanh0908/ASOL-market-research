@@ -1,11 +1,12 @@
 """HTTP transport for Google Play with retries, timeout, and evidence preservation."""
+
 from __future__ import annotations
 
 import dataclasses
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import Self
 
 import httpx
 
@@ -39,10 +40,10 @@ class GoogleHttpClient:
         if self._owned_client:
             self.client.close()
 
-    def __enter__(self) -> GoogleHttpClient:
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         self.close()
 
     def get(self, url: str, headers: dict[str, str] | None = None) -> HttpResult:
@@ -65,7 +66,8 @@ class GoogleHttpClient:
     ) -> HttpResult:
         previous: list[HttpResult] = []
 
-        for index in range(4):
+        index = 0
+        while True:
             if index > 0:
                 self.sleep(BACKOFF_DELAYS[index - 1])
 
@@ -78,9 +80,7 @@ class GoogleHttpClient:
                         url, content=content, headers=headers, timeout=DEFAULT_TIMEOUT
                     )
                 else:
-                    response = self.client.get(
-                        url, headers=headers, timeout=DEFAULT_TIMEOUT
-                    )
+                    response = self.client.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
                 status = response.status_code
                 body = response.content
                 resp_headers = dict(response.headers)
@@ -106,6 +106,4 @@ class GoogleHttpClient:
                 return dataclasses.replace(item, attempts=tuple(previous))
 
             previous.append(item)
-
-        # Unreachable but type-checker friendly
-        return dataclasses.replace(item, attempts=tuple(previous))
+            index += 1

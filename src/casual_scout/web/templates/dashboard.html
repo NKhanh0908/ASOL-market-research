@@ -10,16 +10,16 @@
   </div>
   
   <form method="GET" action="/dashboard" class="page-toolbar dashboard-filter-form">
-    <div class="platform-switcher" role="tablist" aria-label="Nền tảng">
+    <nav class="platform-switcher" aria-label="Nền tảng">
       <a href="/dashboard?country={{ selected_country }}&date={{ selected_date }}&platform=ios"
-         class="platform-tab{% if platform != 'android' %} active{% endif %}">
+         class="platform-tab{% if platform != 'android' %} active{% endif %}"{% if platform != 'android' %} aria-current="page"{% endif %}>
         🍎 Apple iOS
       </a>
       <a href="/dashboard?country={{ selected_country }}&date={{ selected_date }}&platform=android"
-         class="platform-tab{% if platform == 'android' %} active{% endif %}">
+         class="platform-tab{% if platform == 'android' %} active{% endif %}"{% if platform == 'android' %} aria-current="page"{% endif %}>
         🤖 Google Android
       </a>
-    </div>
+    </nav>
     <input type="hidden" name="platform" value="{{ platform or 'ios' }}">
     <div class="control-field">
       <label for="date-select">Ngày dữ liệu</label>
@@ -48,7 +48,7 @@
   <div style="display: flex; justify-content: space-between; align-items: start; gap: 1rem; flex-wrap: wrap;">
     <div>
       <h2 id="collection-panel-title">Thu thập {% if platform == 'android' %}Android{% else %}iOS{% endif %} · {{ ios_collection_count }} thị trường</h2>
-      <p>Top Free Casual · {{ ios_collection_label }}.</p>
+      <p>{% if platform == 'android' %}Top Free &amp; Top Grossing{% else %}Top Free{% endif %} Casual · {{ ios_collection_label }}.</p>
     </div>
     <form method="POST" action="/runs" class="collection-action">
       <input type="hidden" name="country" value="{{ ios_collection_scope }}">
@@ -156,8 +156,8 @@
   <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
     <div>
       <h3 style="font-size: 1.15rem; margin: 0;">Game đáng chú ý</h3>
-      <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0.25rem 0 0 0;">Ưu tiên tăng ở nhiều thị trường → đang tăng → mới vào BXH. Không chấm điểm tổng.</p>
-      <p class="notice">Hiện diện tính trên BXH Top Free iOS hoàn chỉnh cùng ngày UTC, không phải thị phần. So sánh chỉ dùng thị trường có dữ liệu ở cả hai mốc.</p>
+      <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0.25rem 0 0 0;">{% if platform == 'android' %}Opportunity Radar v1.5 · điểm cơ hội và bằng chứng thứ hạng.{% else %}Ưu tiên tăng ở nhiều thị trường → đang tăng → mới vào BXH. Không chấm điểm tổng.{% endif %}</p>
+      <p class="notice">Hiện diện tính trên BXH Top Free {% if platform == 'android' %}Android{% else %}iOS{% endif %} hoàn chỉnh cùng ngày UTC, không phải thị phần. So sánh chỉ dùng thị trường có dữ liệu ở cả hai mốc.</p>
     </div>
     <div style="display: flex; gap: 0.5rem;">
       <a href="/api/export/radar?format=csv&date={{ selected_date }}&country={{ selected_country }}&platform={{ platform or 'ios' }}" class="btn btn-secondary">Xuất CSV</a>
@@ -182,6 +182,7 @@
         {% for item in radar_items %}
         <tr>
           <td style="padding: 0.75rem;">
+            {% if platform == 'android' %}<strong>{{ item.opportunity_score }} · {{ item.opportunity_badge }}</strong><br>{% endif %}
             <strong>{{ item.noteworthy_label }}</strong>
             {% for reason in item.noteworthy_reasons %}
               <div class="notice">{{ reason }}</div>
@@ -237,7 +238,9 @@
           </td>
 
           <td style="padding: 0.75rem; text-align: right;">
-            {% if item.is_shortlisted %}
+            {% if platform == 'android' %}
+              <a class="btn btn-secondary" href="/games/{{ item.app_id }}?platform=android&country={{ item.country }}">Xem game</a>
+            {% elif item.is_shortlisted %}
               <span class="table-callout table-callout-success">Đã lưu</span>
             {% else %}
               <button class="btn btn-secondary" onclick="openBookmarkModal('{{ item.app_id }}', '{{ item.title | escape }}', '{{ item.country }}', {{ item.current_rank }}, '{{ item.subgenre }}', '{{ item.mechanic }}')">
@@ -254,6 +257,7 @@
 </div>
 
 <!-- Modal Quick Bookmark -->
+{% if platform != 'android' %}
 <div id="bookmarkModal" class="bookmark-modal" role="dialog" aria-modal="true" aria-labelledby="bookmark-modal-title">
   <div class="bookmark-modal-panel">
     <h2 id="bookmark-modal-title">Lưu vào Shortlist</h2>
@@ -290,6 +294,7 @@
     </form>
   </div>
 </div>
+{% endif %}
 
 <script>
 const tokenColor = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -305,7 +310,7 @@ scheduleToggle.addEventListener('change', async () => {
   scheduleToggle.disabled = true;
   scheduleMessage.style.display = 'none';
   try {
-    const response = await fetch('/api/schedule', {
+    const response = await fetch({{ ('/api/android/schedule' if platform == 'android' else '/api/schedule') | tojson }}, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

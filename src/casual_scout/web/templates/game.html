@@ -20,10 +20,10 @@
         <span>Nền tảng: <strong>{% if platform == 'android' %}🤖 Google Android{% else %}🍎 Apple iOS{% endif %}</strong></span>
         <span style="margin-left: 1rem;">Nhà phát triển: <strong>{{ metadata.developer or entry.developer or "—" }}</strong></span>
         <span style="margin-left: 1rem;">Thể loại: <strong>{{ analytics.subgenre or metadata.primary_genre or "Casual" }}</strong></span>
-        {% if metadata.min_installs or metadata.installs %}
-          <span style="margin-left: 1rem;">Lượt tải: {{ render_installs_badge(metadata.min_installs) | safe }} ({{ metadata.installs }})</span>
+        {% if platform == 'android' %}
+          <span style="margin-left: 1rem;">Lượt tải: {{ render_installs_badge(metadata.get('min_installs')) | safe }}{% if metadata.get('installs') %} ({{ metadata.installs }}){% endif %}</span>
         {% endif %}
-        {% if metadata.average_rating is not none %}
+        {% if metadata.get('average_rating') is not none %}
           <span style="margin-left: 1rem;">Đánh giá: <strong>{{ metadata.average_rating }}★ ({{ metadata.rating_count }} lượt)</strong></span>
         {% endif %}
       </div>
@@ -35,7 +35,7 @@
             Mở trên {% if platform == 'android' %}Google Play{% else %}App Store{% endif %} ↗
           </a>
         {% endif %}
-        <a href="/data?country={{ country }}&platform={{ platform or 'ios' }}{% if snapshot_id %}&snapshot_id={{ snapshot_id }}{% endif %}" class="btn btn-secondary">
+        <a href="/data?country={{ country }}&platform={{ platform or 'ios' }}&feed_type={{ feed_type }}{% if snapshot_id %}&snapshot_id={{ snapshot_id }}{% endif %}" class="btn btn-secondary">
           ← Quay lại bảng xếp hạng
         </a>
       </div>
@@ -106,7 +106,7 @@
   <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
     <div>
       <span class="badge badge-model">
-        {{ analytics.monetization_model or metadata.monetization_model or 'PURE_ADS' }}
+        {{ analytics.monetization_model or metadata.monetization_model or 'UNKNOWN' }}
       </span>
     </div>
     {% if metadata.price is not none %}
@@ -151,13 +151,14 @@
       {% endfor %}
     </div>
   {% else %}
-    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">Không phát hiện gói IAP nào (Kiếm tiền chủ yếu qua quảng cáo trong game / IAA hoặc Free hoàn toàn).</p>
+    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;">Chưa có thông tin chi tiết về các gói IAP.</p>
   {% endif %}
 </div>
 
 <!-- Rank History (14 Days) -->
 <div class="card">
   <div class="card-title">📈 Lịch sử thứ hạng (14 ngày gần nhất)</div>
+  <div style="height: 260px;"><canvas id="rank-history-chart" aria-label="Thứ hạng Top Free và Top Grossing 14 ngày" role="img"></canvas></div>
   {% if rank_history %}
     <div class="table-responsive">
       <table>
@@ -176,7 +177,7 @@
           {% for h in rank_history %}
             <tr>
               <td><code>{{ h.date }}</code></td>
-              <td class="rank"><strong>#{{ h.current_rank }}</strong></td>
+              <td class="rank"><strong>{{ '#' ~ h.free_rank if h.free_rank else '—' }}</strong></td>
               <td>
                 {% if h.grossing_rank %}
                   <strong class="table-callout-warning">#{{ h.grossing_rank }}</strong>
@@ -237,7 +238,7 @@
 </div>
 
 <div class="card">
-  <div class="card-title">Mô tả ứng dụng (Nguồn Apple Store)</div>
+  <div class="card-title">Mô tả ứng dụng (Nguồn {% if platform == 'android' %}Google Play{% else %}Apple Store{% endif %})</div>
   <div class="game-description">
     {{ metadata.description or "Không có thông tin mô tả chi tiết." }}
   </div>
@@ -254,4 +255,15 @@
     {% endif %}
   </div>
 </div>
+<script>
+const rankHistory = {{ chart_history | tojson }};
+new Chart(document.getElementById('rank-history-chart'), {
+  type: 'line',
+  data: {labels: rankHistory.map(row => row.date), datasets: [
+    {label: 'Top Free', data: rankHistory.map(row => row.free_rank), borderColor: '#23a99d', spanGaps: false},
+    {label: 'Top Grossing', data: rankHistory.map(row => row.grossing_rank), borderColor: '#d99443', spanGaps: false}
+  ]},
+  options: {responsive: true, maintainAspectRatio: false, scales: {y: {reverse: true, min: 1}}}
+});
+</script>
 {% endblock %}

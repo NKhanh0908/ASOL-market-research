@@ -50,13 +50,14 @@ def compute_monetization_efficiency(
     - VIRAL_FREE: free_rank is not None and free_rank <= 10 and grossing_rank is None
     - None otherwise
     """
-    if free_rank is not None and grossing_rank is not None:
-        if free_rank <= 15 and grossing_rank <= 15:
-            return "MEGA_HIT"
+    if free_rank is not None and grossing_rank is not None and free_rank <= 15 and grossing_rank <= 15:
+        return "MEGA_HIT"
 
-    if grossing_rank is not None and grossing_rank <= 30:
-        if free_rank is None or free_rank > 30:
-            return "HIGH_GROSSING_EFFICIENCY"
+    if grossing_rank is not None and grossing_rank <= 30 and (free_rank is None or free_rank > 30):
+        return "HIGH_GROSSING_EFFICIENCY"
+
+    if free_rank is not None and free_rank <= 10 and grossing_rank is None:
+        return "VIRAL_FREE"
 
     return None
 
@@ -71,9 +72,7 @@ def classify_android_monetization(
     """Classify Android game monetization model based on price, ads, IAP, and grossing rank."""
     if price is not None and price > 0:
         return "PAID_PREMIUM"
-    if price is None and has_ads is None and has_iap is None and grossing_rank is None:
-        return "UNKNOWN"
-    if price is not None and price != 0:
+    if price != 0:
         return "UNKNOWN"
     iap = (has_iap is True) or (grossing_rank is not None)
     if has_ads is True and iap:
@@ -84,6 +83,4 @@ def classify_android_monetization(
         return "PURE_ADS"
     if has_ads is False and has_iap is False and grossing_rank is None:
         return "UNKNOWN"
-    if iap:
-        return "PURE_IAP"
     return "UNKNOWN"

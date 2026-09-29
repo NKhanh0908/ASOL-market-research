@@ -10,6 +10,24 @@
 
 **Spec:** [SPEC-AND-03](../specs/2026-09-28-android-cli-web-integration-spec.md)
 
+## Execution status — 2026-09-29
+
+Authoritative progress: [platform acceptance](../../operations/2026-09-28-android-platform-acceptance.md).
+The user accepted operational partial charts and measured crawl times on 2026-09-29.
+Original step recipes remain below; separate RED/commit executions are not implied.
+
+- [x] Task 1: platform CLI flags, shared dispatch and sequential `all` verified.
+- [x] Task 2: platform/date/snapshot read scope and historical evidence verified.
+- [x] Task 3: validated JSON API, CSRF/origin, scope idempotency, single launch and recovery verified.
+- [x] Task 4 implementation: switchers, installs, radar v1.5 and 14-day dual game history delivered.
+- [x] Task 5: HTTP core cutover, atomic nine-market schedules and dead Selenium provider removal verified.
+- [x] Task 6 offline: API → core collection → analysis → data/radar/game, cache and iOS preservation pass.
+- [ ] Browser visual QA at 390px and 1440px: no browser exposed in this environment.
+- [ ] Original live release gate: full Top100 matrix and six runs each <60 seconds.
+
+Full regression suite: 507 passed. Two completed live measurements and acceptance limits
+are linked above. No production data or Gemini calls were used for acceptance.
+
 ## Global Constraints
 
 - `--platform` (hoặc `-p`), collect choices `{all,ios,android}`.

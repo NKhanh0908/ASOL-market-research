@@ -28,22 +28,22 @@
       <input type="hidden" name="country" value="{{ ios_collection_scope }}">
       <input type="hidden" name="platform" value="{{ platform or 'ios' }}">
       <input type="hidden" name="request_key" value="manual-{{ platform or 'ios' }}-{{ ios_collection_scope }}-{{ now_key }}">
-      <button type="submit" class="btn">Crawl {% if platform == 'android' %}Android{% else %}iOS{% endif %} · {{ ios_collection_count }} thị trường</button>
+      <button type="submit" class="btn">{% if platform == 'android' %}Crawl Android{% else %}Crawl ngay{% endif %} · {{ ios_collection_count }} thị trường</button>
     </form>
   </div>
 
-  <p class="toolbar-note">Một lượt crawl Top Free Casual thu thập lần lượt {{ ios_collection_count }} thị trường: {{ ios_collection_label }}. Bộ lọc bên dưới chỉ đổi dữ liệu đang xem.</p>
+  <p class="toolbar-note">Một lượt crawl {% if platform == 'android' %}Top Free và Top Grossing{% else %}Top Free{% endif %} Casual thu thập lần lượt {{ ios_collection_count }} thị trường: {{ ios_collection_label }}. Bộ lọc bên dưới chỉ đổi dữ liệu đang xem.</p>
   <div class="page-toolbar data-filter-toolbar">
-    <div class="platform-switcher" role="tablist" aria-label="Nền tảng">
-      <a href="/data?country={{ country }}&feed_type={{ feed_type }}&platform=ios"
-         class="platform-tab{% if platform != 'android' %} active{% endif %}">
+    <nav class="platform-switcher" aria-label="Nền tảng">
+      <a href="{{ platform_url('/data', dict(request.query_params), 'ios') }}"
+         class="platform-tab{% if platform != 'android' %} active{% endif %}"{% if platform != 'android' %} aria-current="page"{% endif %}>
         🍎 Apple iOS
       </a>
-      <a href="/data?country={{ country }}&feed_type={{ feed_type }}&platform=android"
-         class="platform-tab{% if platform == 'android' %} active{% endif %}">
+      <a href="{{ platform_url('/data', dict(request.query_params), 'android') }}"
+         class="platform-tab{% if platform == 'android' %} active{% endif %}"{% if platform == 'android' %} aria-current="page"{% endif %}>
         🤖 Google Android
       </a>
-    </div>
+    </nav>
     <div class="feed-switcher" role="group" aria-label="Loại bảng xếp hạng">
       <a href="/data?country={{ country }}&feed_type=top-free&platform={{ platform or 'ios' }}"
          class="feed-option{% if feed_type == 'top-free' %} active{% endif %}"{% if feed_type == 'top-free' %} aria-current="page"{% endif %}>Top Free</a>
@@ -79,6 +79,7 @@
     <p class="toolbar-note">Chọn dữ liệu đã thu thập trước đó</p>
   </div>
 
+  {% if platform != 'android' %}
   <section class="schedule-panel" aria-labelledby="one-time-schedule-heading">
     <div class="schedule-panel-head">
       <div>
@@ -96,6 +97,7 @@
       <span id="one-time-schedule-status" class="schedule-status" role="status"></span>
     </form>
   </section>
+  {% endif %}
 
   {% if selected_snapshot %}
     <div style="margin-top: 0.75rem; font-size: 0.8rem; color: var(--text-muted);">
@@ -106,7 +108,7 @@
       {% if selected_snapshot.raw_hash %}
         <span style="margin-left: 1rem;"><a href="/evidence/{{ selected_snapshot.raw_hash }}" style="color: var(--primary);">Tải raw evidence (JSON)</a></span>
       {% endif %}
-      <span style="margin-left: 1rem;"><a href="/export/csv?country={{ country }}&platform={{ platform or 'ios' }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}{% if selected_signal_filter %}&signal={{ selected_signal_filter }}{% endif %}" style="color: var(--primary);">📥 Tải CSV Phân Tích</a></span>
+      <span style="margin-left: 1rem;"><a href="/export/csv?country={{ country }}&platform={{ platform or 'ios' }}&feed_type={{ feed_type }}{% if selected_snapshot %}&snapshot_id={{ selected_snapshot.id }}{% endif %}{% if selected_signal %}&signal={{ selected_signal }}{% endif %}" style="color: var(--primary);">📥 Tải CSV Phân Tích</a></span>
     </div>
 
     <!-- Quick Filter Tabs -->
