@@ -36,7 +36,7 @@
   - `CoverageRequest(country: str)`
   - `DailyMarketBriefResponse`, `GameRankHistoryResponse`, `CoverageResponse`
 
-- [ ] **Step 1: Write the failing test for MCP input/output contracts**
+- [x] **Step 1: Write the failing test for MCP input/output contracts**
 
 ```python
 # tests/test_mcp_contracts.py
@@ -78,12 +78,12 @@ def test_strong_move_contract():
     assert move.direction == "up"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_mcp_contracts.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'casual_scout.mcp'`
 
-- [ ] **Step 3: Add `mcp` dependency to `pyproject.toml` and implement contracts**
+- [x] **Step 3: Add `mcp` dependency to `pyproject.toml` and implement contracts**
 
 Update `pyproject.toml` dependencies: add `"mcp>=1.2.0"`.
 
@@ -233,12 +233,12 @@ class CoverageResponse(BaseModel):
     platforms: dict[str, PlatformCoverage]
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_mcp_contracts.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add pyproject.toml src/casual_scout/mcp/contracts.py tests/test_mcp_contracts.py
@@ -259,7 +259,7 @@ git commit -m "feat(mcp): define data contracts and validation for market brief 
   - `MarketBriefReader(db_path: Path)`
   - `reader.get_window_snapshots(country: str, platform: str, target_date: str) -> dict[str, SnapshotData]`
 
-- [ ] **Step 1: Write the failing test for MarketBriefReader**
+- [x] **Step 1: Write the failing test for MarketBriefReader**
 
 ```python
 # tests/test_market_brief_reader.py
@@ -310,12 +310,12 @@ def test_reader_finds_canonical_snapshot(sample_db):
     assert snap.entries[0]["rank"] == 1
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_market_brief_reader.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'casual_scout.market_brief'`
 
-- [ ] **Step 3: Implement `MarketBriefReader`**
+- [x] **Step 3: Implement `MarketBriefReader`**
 
 ```python
 # src/casual_scout/market_brief/reader.py
@@ -429,12 +429,12 @@ class MarketBriefReader:
         return result
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_market_brief_reader.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/casual_scout/market_brief/reader.py tests/test_market_brief_reader.py
@@ -455,7 +455,7 @@ git commit -m "feat(mcp): implement read-only snapshot window query in reader"
   - `compute_platform_brief(country: str, platform: str, target_date: str, snapshots: dict[str, SnapshotData]) -> PlatformBrief`
   - `compute_game_history(app_id: str, target_date: str, snapshots: dict[str, SnapshotData]) -> list[RankHistoryPoint]`
 
-- [ ] **Step 1: Write failing tests for calculation logic and threshold boundaries**
+- [x] **Step 1: Write failing tests for calculation logic and threshold boundaries**
 
 ```python
 # tests/test_market_brief_service.py
@@ -500,12 +500,12 @@ def test_strong_movers_threshold_boundary():
     assert "app_up19" not in movers
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_market_brief_service.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'casual_scout.market_brief.service'`
 
-- [ ] **Step 3: Implement calculation service**
+- [x] **Step 3: Implement calculation service**
 
 ```python
 # src/casual_scout/market_brief/service.py
@@ -664,12 +664,12 @@ def compute_platform_brief(
     )
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_market_brief_service.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/casual_scout/market_brief/service.py tests/test_market_brief_service.py
@@ -690,7 +690,7 @@ git commit -m "feat(mcp): implement market brief sorting and threshold evaluatio
   - `create_mcp_app(db_path: Path) -> mcp.server.fastmcp.FastMCP` or ASGI app
   - Registered tools: `get_daily_market_brief`, `get_game_rank_history`, `get_coverage`
 
-- [ ] **Step 1: Write integration test calling MCP tools via test client**
+- [x] **Step 1: Write integration test calling MCP tools via test client**
 
 ```python
 # tests/test_mcp_server.py
@@ -707,12 +707,12 @@ def test_mcp_server_lists_tools(tmp_path: Path):
     assert "get_coverage" in tool_names
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_mcp_server.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'casual_scout.mcp.server'`
 
-- [ ] **Step 3: Implement MCP server with tools**
+- [x] **Step 3: Implement MCP server with tools**
 
 ```python
 # src/casual_scout/mcp/server.py
@@ -814,12 +814,12 @@ def create_mcp_server(db_path: Path) -> FastMCP:
     return mcp
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_mcp_server.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/casual_scout/mcp/server.py tests/test_mcp_server.py
@@ -837,7 +837,7 @@ git commit -m "feat(mcp): implement FastMCP server with 3 market brief tools"
 **Interfaces:**
 - CLI command: `casual_scout mcp-serve --data-dir <path> --port 8003`
 
-- [ ] **Step 1: Write test for `mcp-serve` argument parsing**
+- [x] **Step 1: Write test for `mcp-serve` argument parsing**
 
 ```python
 # tests/test_cli_mcp.py
@@ -853,12 +853,12 @@ def test_mcp_serve_help(capsys):
     assert "--data-dir" in captured.out
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_cli_mcp.py -v`
 Expected: FAIL with `invalid choice: 'mcp-serve'`
 
-- [ ] **Step 3: Add `mcp-serve` subparser and runner to `cli.py`**
+- [x] **Step 3: Add `mcp-serve` subparser and runner to `cli.py`**
 
 In `src/casual_scout/cli.py`:
 Add subparser `mcp-serve`:
@@ -881,12 +881,12 @@ def _run_mcp_serve(args: argparse.Namespace) -> int:
     return 0
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_cli_mcp.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/casual_scout/cli.py tests/test_cli_mcp.py
