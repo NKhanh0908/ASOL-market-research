@@ -30,24 +30,24 @@
 **Interfaces:**
 - Produces: Git diff patch capturing unstaged work in `src/casual_scout/ai/` and `tests/test_ai_*`
 
-- [ ] **Step 1: Check git diff of uncommitted AI changes**
+- [x] **Step 1: Check git diff of uncommitted AI changes**
 
 Run: `git diff -- src/casual_scout/ai/ tests/test_ai_*`
 Expected: View current modifications in `gemini.py`, `output.py`, `settings.py`, and test files.
 
-- [ ] **Step 2: Save the patch to docs/superpowers/patches/**
+- [x] **Step 2: Save the patch to docs/superpowers/patches/**
 
 ```bash
 mkdir -p docs/superpowers/patches
 git diff -- src/casual_scout/ai/ tests/test_ai_* > docs/superpowers/patches/2026-09-30-pre-retirement-ai.patch
 ```
 
-- [ ] **Step 3: Verify the patch file exists and is non-empty**
+- [x] **Step 3: Verify the patch file exists and is non-empty**
 
 Run: `test -s docs/superpowers/patches/2026-09-30-pre-retirement-ai.patch && echo "Patch verified"`
 Expected: "Patch verified"
 
-- [ ] **Step 4: Commit the patch backup**
+- [x] **Step 4: Commit the patch backup**
 
 ```bash
 git add docs/superpowers/patches/2026-09-30-pre-retirement-ai.patch
@@ -68,7 +68,7 @@ git commit -m "docs(ai): preserve pre-retirement AI diff before removal"
   - `migrate_ai_retirement(conn: sqlite3.Connection) -> None`
   - Integration with `Repository.initialize()`
 
-- [ ] **Step 1: Write failing test for retirement migration**
+- [x] **Step 1: Write failing test for retirement migration**
 
 ```python
 # tests/test_migration_ai_retirement.py
@@ -122,12 +122,12 @@ def test_migration_drops_tables_and_preserves_shortlist(tmp_path: Path):
     conn.close()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_migration_ai_retirement.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'casual_scout.storage.migrations_ai_retirement'`
 
-- [ ] **Step 3: Implement `migrate_ai_retirement`**
+- [x] **Step 3: Implement `migrate_ai_retirement`**
 
 ```python
 # src/casual_scout/storage/migrations_ai_retirement.py
@@ -187,14 +187,14 @@ def migrate_ai_retirement(conn: sqlite3.Connection) -> None:
         )
 ```
 
-- [ ] **Step 4: Connect migration to `Repository.initialize` and run test**
+- [x] **Step 4: Connect migration to `Repository.initialize` and run test**
 
 Modify `src/casual_scout/storage/repository.py`:
 In `initialize()`, call `migrate_ai_retirement(connection)`.
 Run: `pytest tests/test_migration_ai_retirement.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/casual_scout/storage/migrations_ai_retirement.py src/casual_scout/storage/repository.py tests/test_migration_ai_retirement.py
@@ -219,7 +219,7 @@ git commit -m "feat(storage): implement safe AI retirement database migration"
 - Web app no longer registers `/recommendations` router.
 - Accessing `/recommendations` or `/recommendations/{id}` returns HTTP 404.
 
-- [ ] **Step 1: Write test verifying AI endpoints return 404 and dashboard renders without AI elements**
+- [x] **Step 1: Write test verifying AI endpoints return 404 and dashboard renders without AI elements**
 
 ```python
 # tests/test_web_ai_removed.py
@@ -250,12 +250,12 @@ def test_dashboard_does_not_contain_ai_button(tmp_path):
     assert "/recommendations" not in res.text
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_web_ai_removed.py -v`
 Expected: FAIL (endpoints return 200 or AI buttons exist)
 
-- [ ] **Step 3: Remove AI files and prune web/CLI integrations**
+- [x] **Step 3: Remove AI files and prune web/CLI integrations**
 
 1. Delete directory `src/casual_scout/ai/`.
 2. Delete `src/casual_scout/web/ai.py`, `src/casual_scout/web/templates/recommendations.html`, `src/casual_scout/web/templates/recommendation_detail.html`.
@@ -268,12 +268,12 @@ Expected: FAIL (endpoints return 200 or AI buttons exist)
 5. In `src/casual_scout/cli.py`:
    - Remove `GEMINI_API_KEY` and AI settings setup from `_run_serve`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_web_ai_removed.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -u src/casual_scout/ tests/test_web_ai_removed.py
@@ -292,7 +292,7 @@ git commit -m "feat(web): remove AI router, templates, and lifespan management"
 **Interfaces:**
 - All tests pass; zero imports of deleted modules.
 
-- [ ] **Step 1: Remove obsolete AI test files**
+- [x] **Step 1: Remove obsolete AI test files**
 
 Delete:
 - `tests/test_ai_gemini.py`
@@ -304,12 +304,12 @@ Delete:
 - `tests/test_ai_evidence.py`
 - Any remaining `tests/test_ai_*.py` files.
 
-- [ ] **Step 2: Run full regression test suite**
+- [x] **Step 2: Run full regression test suite**
 
 Run: `pytest tests/test_analysis_*.py tests/test_storage_*.py tests/test_web_*.py -v`
 Expected: All core tests pass without failure.
 
-- [ ] **Step 3: Verify git status and commit**
+- [x] **Step 3: Verify git status and commit**
 
 ```bash
 git add -u tests/
