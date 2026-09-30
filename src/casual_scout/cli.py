@@ -367,6 +367,49 @@ def main(argv: list[str] | None = None) -> int:
         "--data-dir", type=Path, default=Path("data"), help="Path to data directory"
     )
 
+    # mcp-serve
+    mcp_parser = subparsers.add_parser("mcp-serve", help="Run standalone HTTP MCP server")
+    mcp_parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=Path("data"),
+        help="Path to data directory (default: ./data)",
+    )
+    mcp_parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Host to bind (default: 127.0.0.1)",
+    )
+    mcp_parser.add_argument(
+        "--port",
+        type=int,
+        default=8003,
+        help="Port to listen on (default: 8003)",
+    )
+
+    # retention
+    retention_parser = subparsers.add_parser(
+        "retention", help="Audit or apply 15-day rolling retention"
+    )
+    retention_parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=Path("data"),
+        help="Path to data directory",
+    )
+    retention_group = retention_parser.add_mutually_exclusive_group(required=True)
+    retention_group.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Audit candidates without altering data",
+    )
+    retention_group.add_argument(
+        "--apply",
+        action="store_true",
+        help="Execute deletion",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "init":
@@ -484,14 +527,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "serve":
         import uvicorn
 
-        from casual_scout.ai.settings import load_ai_runtime
+
         from casual_scout.web.app import create_app
 
         repo = Repository(args.data_dir)
         repo.initialize()
         settings = Settings(args.data_dir)
-        ai_settings, ai_provider = load_ai_runtime()
-        app = create_app(settings, ai_settings=ai_settings, ai_provider=ai_provider)
+        app = create_app(settings)
         uvicorn.run(app, host=args.host, port=args.port)
         return 0
 
@@ -756,6 +798,36 @@ def main(argv: list[str] | None = None) -> int:
                 sys.stdout.write(
                     f"| {it['status']} | {it['priority']} | #{it['rank_at_bookmark']} | `{it['app_id']}` | {it['title']} | {gm} | {it.get('notes') or '—'} |\n"
                 )
+            return 0
+
+    if args.command == "mcp-serve":
+        import uvicorn
+        from casual_scout.mcp.server import create_mcp_server
+
+        db_file = Path(args.data_dir) / "casual-scout.sqlite3"
+        server = create_mcp_server(db_file)
+        app = server.streamable_http_app()
+        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+        return 0
+
+    if args.command == "retention":
+        from casual_scout.operations.retention import RetentionService
+
+        service = RetentionService(args.data_dir)
+        if args.dry_run:
+            report = service.scan_candidates()
+            sys.stdout.write(f"Cutoff (UTC): {report.cutoff_utc}\n")
+            sys.stdout.write(f"Expired snapshots: {report.expired_snapshots_count}\n")
+            sys.stdout.write(f"Expired daily canonical: {report.expired_daily_canonical_count}\n")
+            sys.stdout.write(f"Expired daily analytics: {report.expired_daily_analytics_count}\n")
+            sys.stdout.write(f"Expired runs: {report.expired_runs_count}\n")
+            sys.stdout.write(f"Unreferenced raw files: {len(report.raw_files_to_delete)}\n")
+            sys.stdout.write(f"Unreferenced log files: {len(report.log_files_to_delete)}\n")
+            sys.stdout.write(f"Reclaimable bytes: {report.estimated_bytes_reclaimable:,} bytes\n")
+            return 0
+        else:
+            summary = service.apply_retention()
+            sys.stdout.write(f"Retention applied: {summary}\n")
             return 0
 
     return 0

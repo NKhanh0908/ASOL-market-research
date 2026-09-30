@@ -43,45 +43,6 @@
   </form>
 </div>
 
-{% if platform != 'android' %}
-<link rel="stylesheet" href="{{ static_asset('recommendations.css') }}">
-<section class="ai-dashboard-action" aria-label="Gợi ý AI cho dữ liệu iOS">
-  <div class="ai-actions">
-    <button type="button" id="ai-create" class="btn btn-secondary"
-            data-date="{{ selected_date }}" data-market="{{ selected_country }}"
-            data-csrf="{{ csrf_token }}"{% if mock_demo %} disabled{% endif %}>Tạo gợi ý AI</button>
-    <a href="/recommendations">Lịch sử gợi ý AI</a>
-  </div>
-  <p class="notice">Phạm vi theo ngày và thị trường đang chọn · chỉ chạy khi bạn xác nhận.</p>
-  {% if mock_demo %}<p class="ai-notice">Gợi ý AI bị tắt trong bản demo dữ liệu giả lập.</p>{% endif %}
-  <p id="ai-feedback" role="status" aria-live="polite"></p>
-</section>
-<dialog id="ai-confirm" class="ai-confirm-dialog" aria-labelledby="ai-confirm-title"
-        aria-describedby="ai-confirm-description">
-  <h2 id="ai-confirm-title">Xác nhận tạo gợi ý AI</h2>
-  <p id="ai-confirm-description">Dữ liệu thị trường công khai trong phạm vi này sẽ được gửi đến nhà cung cấp AI. Mỗi lượt mới là một lần gọi AI mới.</p>
-  <dl class="ai-quote-details">
-    <dt>Phạm vi iOS</dt><dd id="ai-scope"></dd>
-    <dt>Nhà cung cấp / mô hình</dt><dd id="ai-provider"></dd>
-    <dt>Giới hạn</dt><dd id="ai-limits"></dd>
-    <dt>Chế độ chi phí</dt><dd id="ai-cost"></dd>
-    <dt>Lượt thử còn lại hôm nay</dt><dd id="ai-attempts"></dd>
-  </dl>
-  <ul id="ai-coverage" class="ai-notice" aria-label="Cảnh báo độ phủ dữ liệu"></ul>
-  <p id="ai-warning" class="ai-notice" role="status" aria-live="polite"></p>
-  <label id="ai-unknown-label" class="ai-confirm-consent" hidden>
-    <input type="checkbox" id="ai-unknown">
-    <span>Tôi hiểu chi phí thực tế chưa xác định; đây là một lần gọi AI mới.</span>
-  </label>
-  <div class="ai-actions">
-    <button id="ai-submit" type="button" class="btn" disabled>Tạo gợi ý</button>
-    <button id="ai-cancel" type="button" class="btn btn-secondary" autofocus>Quay lại</button>
-    <a id="ai-inspect-history" href="/recommendations" hidden>Kiểm tra lịch sử gợi ý AI</a>
-  </div>
-</dialog>
-<script src="{{ static_asset('recommendations.js') }}" defer></script>
-{% endif %}
-
 <div class="dashboard-overview">
 <section class="card collection-panel" aria-labelledby="collection-panel-title">
   <div style="display: flex; justify-content: space-between; align-items: start; gap: 1rem; flex-wrap: wrap;">

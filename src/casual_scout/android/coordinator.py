@@ -79,6 +79,16 @@ class AndroidCoordinator(DailyScheduler):
             LOG.exception("iOS scheduler tick failed")
             result = "ios_error"
         now = self.now()
+        today_utc = now.astimezone(UTC).date().isoformat()
+        if getattr(self, "_last_retention_date_utc", None) != today_utc:
+            try:
+                from casual_scout.operations.retention import RetentionService
+
+                RetentionService(self.repository.data_dir).apply_retention()
+                self._last_retention_date_utc = today_utc
+            except Exception:
+                LOG.exception("Daily retention sweep failed")
+
         from zoneinfo import ZoneInfo
 
         local_date = now.astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date().isoformat()

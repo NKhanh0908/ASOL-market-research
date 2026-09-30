@@ -1,0 +1,131 @@
+﻿diff --git a/src/casual_scout/ai/gemini.py b/src/casual_scout/ai/gemini.py
+index 63cc155..2adce74 100644
+--- a/src/casual_scout/ai/gemini.py
++++ b/src/casual_scout/ai/gemini.py
+@@ -10,8 +10,8 @@ import httpx
+ from casual_scout.ai.contracts import ProviderReply
+ from casual_scout.ai.provider import ProviderFailure, ProviderQuota, ProviderTimeout
+ 
+-_URL = ("https://generativelanguage.googleapis.com/v1beta/models/"
+-        "gemini-2.5-flash:generateContent")
++_URL_TEMPLATE = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
++DEFAULT_MODEL_ID = "gemini-3.5-flash-lite"
+ _USAGE_FIELDS = {
+     "promptTokenCount": "input_tokens",
+     "candidatesTokenCount": "output_tokens",
+@@ -34,16 +34,19 @@ class GeminiProvider:
+     """Call the fixed Flash model once and return only parsed JSON and safe usage."""
+ 
+     provider_id = "gemini"
+-    model_id = "gemini-2.5-flash"
+ 
+-    def __init__(self, api_key: str, *, timeout_seconds: int = 60,
++    def __init__(self, api_key: str, *, model_id: str = DEFAULT_MODEL_ID,
++                 timeout_seconds: int = 60,
+                  transport: httpx.BaseTransport | None = None) -> None:
+         if (not isinstance(api_key, str) or not api_key or api_key.strip() != api_key
+                 or any(ord(char) < 33 or ord(char) > 126 for char in api_key)):
+             raise ValueError("invalid Gemini API key")
++        if not isinstance(model_id, str) or not model_id.strip():
++            raise ValueError("invalid Gemini model ID")
+         if type(timeout_seconds) is not int or timeout_seconds <= 0:
+             raise ValueError("invalid Gemini timeout")
+         self._api_key = api_key
++        self.model_id = model_id.strip()
+         self._timeout_seconds = timeout_seconds
+         self._transport = transport
+ 
+@@ -71,9 +74,10 @@ class GeminiProvider:
+                     "maxOutputTokens": cap,
+                 },
+             }
++            url = _URL_TEMPLATE.format(model=self.model_id)
+             with httpx.Client(timeout=httpx.Timeout(self._timeout_seconds),
+                               follow_redirects=False, transport=self._transport) as client:
+-                response = client.post(_URL, headers={"x-goog-api-key": self._api_key}, json=body)
++                response = client.post(url, headers={"x-goog-api-key": self._api_key}, json=body)
+         except ProviderFailure:
+             raise
+         except httpx.TimeoutException:
+diff --git a/src/casual_scout/ai/output.py b/src/casual_scout/ai/output.py
+index b8b00d1..008798f 100644
+--- a/src/casual_scout/ai/output.py
++++ b/src/casual_scout/ai/output.py
+@@ -193,6 +193,8 @@ def _supported_mechanic(item: dict) -> bool:
+ 
+ def validate_output(value: dict, manifest: dict) -> dict:
+     """Return schema-normalized output or raise ValueError; never alter feasibility."""
++    if isinstance(value, dict) and value.get("schema_version") in {"1.0", "1.0.0"}:
++        value = {**value, "schema_version": "1"}
+     parsed = Output.model_validate(value)
+     if not isinstance(manifest, dict):
+         raise ValueError("manifest must be a dictionary")  # noqa: TRY004 - public contract
+diff --git a/src/casual_scout/ai/settings.py b/src/casual_scout/ai/settings.py
+index f031f17..c3197ed 100644
+--- a/src/casual_scout/ai/settings.py
++++ b/src/casual_scout/ai/settings.py
+@@ -87,11 +87,13 @@ def load_ai_runtime(env_path: Path | None = None) -> tuple[AISettings, GeminiPro
+         "CASUAL_SCOUT_AI_MAX_OUTPUT_TOKENS", "CASUAL_SCOUT_AI_TIMEOUT_SECONDS",
+         "CASUAL_SCOUT_AI_CONFIRM_UNKNOWN_COST", "CASUAL_SCOUT_AI_COST_MODE",
+         "CASUAL_SCOUT_AI_FREE_TIER_CONFIRMED", "CASUAL_SCOUT_AI_MAX_RUNS_PER_DAY",
++        "CASUAL_SCOUT_AI_MODEL",
+     ):
+         if name in os.environ:
+             values[name] = os.environ[name]
+     settings = load_ai_settings(values)
+     key = values.get("GEMINI_API_KEY")
++    model_id = values.get("CASUAL_SCOUT_AI_MODEL", "gemini-3.5-flash-lite")
+     if not settings.enabled:
+         return settings, None
+     if (settings.cost_mode != "free_tier" or not settings.free_tier_confirmed
+@@ -101,7 +103,7 @@ def load_ai_runtime(env_path: Path | None = None) -> tuple[AISettings, GeminiPro
+             or settings.timeout_seconds <= 0 or not key):
+         return replace(settings, enabled=False), None
+     try:
+-        provider = GeminiProvider(key, timeout_seconds=settings.timeout_seconds)
++        provider = GeminiProvider(key, model_id=model_id, timeout_seconds=settings.timeout_seconds)
+     except ValueError:
+         return replace(settings, enabled=False), None
+     return settings, provider
+diff --git a/tests/test_ai_gemini.py b/tests/test_ai_gemini.py
+index b45336e..70d63a0 100644
+--- a/tests/test_ai_gemini.py
++++ b/tests/test_ai_gemini.py
+@@ -13,7 +13,7 @@ from casual_scout.ai.provider import ProviderFailure, ProviderQuota, ProviderTim
+ from casual_scout.ai.settings import AISettings, load_ai_runtime
+ 
+ KEY = "dummy-test-key"
+-URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
++URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent"
+ FROZEN = {
+     "system_prompt": "Persisted instruction exactly",
+     "user_evidence_json": '{"analysis_date":"2026-09-25","candidates":[]}',
+@@ -55,7 +55,7 @@ def test_one_bounded_request_uses_frozen_prompt_evidence_and_schema():
+         return httpx.Response(200, json=_response())
+ 
+     provider = GeminiProvider(KEY, timeout_seconds=7, transport=httpx.MockTransport(handle))
+-    assert (provider.provider_id, provider.model_id) == ("gemini", "gemini-2.5-flash")
++    assert (provider.provider_id, provider.model_id) == ("gemini", "gemini-3.5-flash-lite")
+     assert provider.estimate_cost(FROZEN) is None
+     reply = provider.complete(FROZEN)
+     assert reply.output == {"schema_version": "1", "recommendations": []}
+diff --git a/tests/test_ai_output.py b/tests/test_ai_output.py
+index 02bb043..54ded5a 100644
+--- a/tests/test_ai_output.py
++++ b/tests/test_ai_output.py
+@@ -208,6 +208,15 @@ def test_prompt_and_schema_expose_frozen_contract():
+     assert sha256(canonical_json(OUTPUT_SCHEMA).encode("utf-8")).hexdigest() == (
+         "a086c410323a1bb9d6e81bfb5414326a44f0b258bdf0b62821426060f86dac38"
+     )
++
++
++@pytest.mark.parametrize("version", ["1.0", "1.0.0"])
++def test_schema_version_variations_are_normalized(version):
++    value = valid_output()
++    value["schema_version"] = version
++    validated = validate_output(value, manifest())
++    assert validated["schema_version"] == "1"
++
+     assert sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest() == (
+         "5462c4b97ec97a9b8860db266b00b4d13ae4f418713a3d690a38a7acd5dd4035"
+     )

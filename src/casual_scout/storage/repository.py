@@ -69,11 +69,13 @@ class Repository:
     def initialize(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         schema = Path(__file__).with_name("schema.sql").read_text(encoding="utf-8")
-        ai_schema = (Path(__file__).parents[1] / "ai" / "schema.sql").read_text(encoding="utf-8")
         now = _utc_text(datetime.now(UTC))
         with closing(self._connect()) as connection:
             connection.executescript(schema)
-            connection.executescript(ai_schema)
+            from casual_scout.storage.migrations_ai_retirement import migrate_ai_retirement
+            migrate_ai_retirement(connection)
+            from casual_scout.storage.migrations_retention import migrate_retention_triggers
+            migrate_retention_triggers(connection)
             migrate_android_columns(connection)
             # Idempotent column migrations for Phase 3.5
             meta_cols = [r[1] for r in connection.execute("PRAGMA table_info(metadata_versions)").fetchall()]
