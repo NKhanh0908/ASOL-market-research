@@ -324,7 +324,7 @@ def test_pages_load_content_versioned_static_assets(web_setup, page):
     _repo, client, _launcher, _calls = web_setup
     html = client.get(page).text
     asset_urls = re.findall(r'(?:href|src)="(/static/[^" ]+)"', html)
-    expected_assets = {"app.css", "recommendations.css", "recommendations.js"} if page == "/dashboard" else {"app.css"}
+    expected_assets = {"app.css"}
     assert {url.split("?")[0].removeprefix("/static/") for url in asset_urls} == expected_assets
     assert len(asset_urls) == len(expected_assets)
     for url in asset_urls:
