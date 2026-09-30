@@ -78,6 +78,12 @@ def create_app(
         jobs.recover_dead_processes()
         scheduler.start()
         try:
+            from casual_scout.operations.retention import RetentionService
+
+            RetentionService(settings.data_dir).apply_retention()
+        except Exception:
+            pass
+        try:
             yield
         finally:
             scheduler.stop()
