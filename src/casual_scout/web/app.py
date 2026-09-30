@@ -61,9 +61,6 @@ def create_app(
     launcher: Callable[[str, Path], int] = launch_pipeline,
     scheduler_factory: Callable[[Repository, Callable[[str, Path], int]], object] | None = None,
     android_launcher=launch_android,
-    *,
-    ai_provider=None,
-    ai_settings=None,
 ) -> FastAPI:
     repo = Repository(settings.data_dir)
     repo.initialize()
@@ -79,15 +76,11 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         jobs.recover_dead_processes()
-        worker.recover_orphans()
         scheduler.start()
         try:
             yield
         finally:
-            try:
-                scheduler.stop()
-            finally:
-                worker.close()
+            scheduler.stop()
 
     app = FastAPI(title="Casual Scout", lifespan=lifespan)
     app.state.repo = repo
@@ -122,17 +115,6 @@ def create_app(
     templates.env.globals["app_store_url"] = app_store_url
     app.include_router(android_router(android_store, templates, sec_mgr, android_launcher))
     app.include_router(create_platform_router(repo, launcher, sec_mgr))
-    from casual_scout.ai.service import EvaluationEngine
-    from casual_scout.ai.settings import AISettings
-    from casual_scout.ai.storage import EvaluationStore
-    from casual_scout.ai.worker import EvaluationWorker
-    from casual_scout.web.ai import ai_router
-
-    engine = EvaluationEngine(repo, EvaluationStore(repo), ai_settings or AISettings(), ai_provider)
-    app.state.ai_engine = engine
-    worker = EvaluationWorker(engine, engine.store)
-    app.state.ai_worker = worker
-    app.include_router(ai_router(engine, sec_mgr, templates, worker))
 
     if static_dir.is_dir():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

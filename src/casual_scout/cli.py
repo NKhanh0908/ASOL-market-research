@@ -505,14 +505,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "serve":
         import uvicorn
 
-        from casual_scout.ai.settings import load_ai_runtime
+
         from casual_scout.web.app import create_app
 
         repo = Repository(args.data_dir)
         repo.initialize()
         settings = Settings(args.data_dir)
-        ai_settings, ai_provider = load_ai_runtime()
-        app = create_app(settings, ai_settings=ai_settings, ai_provider=ai_provider)
+        app = create_app(settings)
         uvicorn.run(app, host=args.host, port=args.port)
         return 0
 
