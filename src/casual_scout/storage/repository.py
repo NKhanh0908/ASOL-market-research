@@ -74,6 +74,8 @@ class Repository:
             connection.executescript(schema)
             from casual_scout.storage.migrations_ai_retirement import migrate_ai_retirement
             migrate_ai_retirement(connection)
+            from casual_scout.storage.migrations_retention import migrate_retention_triggers
+            migrate_retention_triggers(connection)
             migrate_android_columns(connection)
             # Idempotent column migrations for Phase 3.5
             meta_cols = [r[1] for r in connection.execute("PRAGMA table_info(metadata_versions)").fetchall()]
