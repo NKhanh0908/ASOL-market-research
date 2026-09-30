@@ -34,7 +34,7 @@
   - `migrate_retention_triggers(conn: sqlite3.Connection) -> None`
   - Connection authorizer or table trigger guard updated to allow DELETE during retention maintenance transactions.
 
-- [ ] **Step 1: Write failing test for retention trigger guard migration**
+- [x] **Step 1: Write failing test for retention trigger guard migration**
 
 ```python
 # tests/test_migration_retention.py
@@ -78,12 +78,12 @@ def test_maintenance_session_can_delete_snapshot(tmp_path: Path):
     conn.close()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_migration_retention.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'casual_scout.storage.migrations_retention'`
 
-- [ ] **Step 3: Implement trigger migration**
+- [x] **Step 3: Implement trigger migration**
 
 ```python
 # src/casual_scout/storage/migrations_retention.py
@@ -127,12 +127,12 @@ def migrate_retention_triggers(conn: sqlite3.Connection) -> None:
         )
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_migration_retention.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/casual_scout/storage/migrations_retention.py tests/test_migration_retention.py
@@ -155,7 +155,7 @@ git commit -m "feat(storage): implement maintenance-guarded delete triggers for 
   - `retention_service.scan_candidates() -> RetentionCandidateReport`
   - `retention_service.apply_retention() -> RetentionSummary`
 
-- [ ] **Step 1: Write failing test for candidate scanning and cutoff calculation**
+- [x] **Step 1: Write failing test for candidate scanning and cutoff calculation**
 
 ```python
 # tests/test_operations_retention.py
@@ -207,12 +207,12 @@ def test_scan_candidates_finds_old_snapshots_and_retains_shortlist(tmp_path: Pat
     assert "hash_new" not in report.unreferenced_raw_hashes
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_operations_retention.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'casual_scout.operations.retention'`
 
-- [ ] **Step 3: Implement RetentionService scan and candidate logic**
+- [x] **Step 3: Implement RetentionService scan and candidate logic**
 
 ```python
 # src/casual_scout/operations/retention.py
@@ -307,12 +307,12 @@ class RetentionService:
             conn.close()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_operations_retention.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/casual_scout/operations/retention.py tests/test_operations_retention.py
@@ -332,7 +332,7 @@ git commit -m "feat(retention): implement cutoff calculation and candidate audit
   - `retention_service.apply_retention() -> dict[str, Any]`
   - Atomic GC manifest write and resume support.
 
-- [ ] **Step 1: Write integration test for two-phase retention apply**
+- [x] **Step 1: Write integration test for two-phase retention apply**
 
 ```python
 # tests/test_retention_execution.py
@@ -378,12 +378,12 @@ def test_apply_retention_deletes_rows_and_files(tmp_path: Path):
     conn.close()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_retention_execution.py -v`
 Expected: FAIL with `AttributeError: 'RetentionService' object has no attribute 'apply_retention'`
 
-- [ ] **Step 3: Implement `apply_retention` in `RetentionService`**
+- [x] **Step 3: Implement `apply_retention` in `RetentionService`**
 
 ```python
 # In src/casual_scout/operations/retention.py
@@ -453,12 +453,12 @@ Expected: FAIL with `AttributeError: 'RetentionService' object has no attribute 
         }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_retention_execution.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/casual_scout/operations/retention.py tests/test_retention_execution.py
@@ -480,7 +480,7 @@ git commit -m "feat(retention): implement two-phase GC transaction and secure un
   - `casual_scout retention --apply [--data-dir <path>]`
 - Daily tick: Run `retention_service.apply_retention()` once per UTC day during `serve` lifespan.
 
-- [ ] **Step 1: Write test for retention CLI commands**
+- [x] **Step 1: Write test for retention CLI commands**
 
 ```python
 # tests/test_cli_retention.py
@@ -496,12 +496,12 @@ def test_cli_retention_dry_run_help(capsys):
     assert "--apply" in captured.out
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_cli_retention.py -v`
 Expected: FAIL with `invalid choice: 'retention'`
 
-- [ ] **Step 3: Implement `retention` CLI parser and handler in `cli.py`**
+- [x] **Step 3: Implement `retention` CLI parser and handler in `cli.py`**
 
 ```python
 # In src/casual_scout/cli.py
@@ -527,12 +527,12 @@ def _run_retention(args: argparse.Namespace) -> int:
         return 0
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_cli_retention.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/casual_scout/cli.py tests/test_cli_retention.py
