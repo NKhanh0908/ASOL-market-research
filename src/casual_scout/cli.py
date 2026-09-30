@@ -367,6 +367,27 @@ def main(argv: list[str] | None = None) -> int:
         "--data-dir", type=Path, default=Path("data"), help="Path to data directory"
     )
 
+    # mcp-serve
+    mcp_parser = subparsers.add_parser("mcp-serve", help="Run standalone HTTP MCP server")
+    mcp_parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=Path("data"),
+        help="Path to data directory (default: ./data)",
+    )
+    mcp_parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Host to bind (default: 127.0.0.1)",
+    )
+    mcp_parser.add_argument(
+        "--port",
+        type=int,
+        default=8003,
+        help="Port to listen on (default: 8003)",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "init":
@@ -757,6 +778,16 @@ def main(argv: list[str] | None = None) -> int:
                     f"| {it['status']} | {it['priority']} | #{it['rank_at_bookmark']} | `{it['app_id']}` | {it['title']} | {gm} | {it.get('notes') or '—'} |\n"
                 )
             return 0
+
+    if args.command == "mcp-serve":
+        import uvicorn
+        from casual_scout.mcp.server import create_mcp_server
+
+        db_file = Path(args.data_dir) / "casual-scout.sqlite3"
+        server = create_mcp_server(db_file)
+        app = server.streamable_http_app()
+        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+        return 0
 
     return 0
 
