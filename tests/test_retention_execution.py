@@ -89,11 +89,19 @@ def test_apply_retention_cleans_analytics_and_canonical(tmp_path: Path):
     db_file = tmp_path / "casual-scout.sqlite3"
     conn = sqlite3.connect(db_file)
     conn.executescript("""
-        CREATE TABLE daily_canonical_snapshots (date TEXT PRIMARY KEY, snapshot_id TEXT, observed_at TEXT);
+        CREATE TABLE snapshots (id TEXT PRIMARY KEY, observed_at TEXT, raw_hash TEXT);
+        CREATE TABLE daily_canonical_snapshots (date TEXT PRIMARY KEY, snapshot_id TEXT REFERENCES snapshots(id), observed_at TEXT);
+        CREATE TABLE platform_canonical_snapshots (date TEXT, platform TEXT, country TEXT, feed_type TEXT, snapshot_id TEXT REFERENCES snapshots(id), observed_at TEXT, created_at TEXT, PRIMARY KEY(date, platform, country, feed_type));
         CREATE TABLE daily_rank_analytics (date TEXT, app_id TEXT, PRIMARY KEY (date, app_id));
+
+        INSERT INTO snapshots (id, observed_at) VALUES ('s1', '2026-09-10T12:00:00Z');
+        INSERT INTO snapshots (id, observed_at) VALUES ('s2', '2026-09-25T12:00:00Z');
 
         INSERT INTO daily_canonical_snapshots VALUES ('2026-09-10', 's1', '2026-09-10T12:00:00Z');
         INSERT INTO daily_canonical_snapshots VALUES ('2026-09-25', 's2', '2026-09-25T12:00:00Z');
+
+        INSERT INTO platform_canonical_snapshots VALUES ('2026-09-10', 'ios', 'vn', 'top-free', 's1', '2026-09-10T12:00:00Z', '2026-09-10T12:00:00Z');
+        INSERT INTO platform_canonical_snapshots VALUES ('2026-09-25', 'ios', 'vn', 'top-free', 's2', '2026-09-25T12:00:00Z', '2026-09-25T12:00:00Z');
 
         INSERT INTO daily_rank_analytics VALUES ('2026-09-10', 'app1');
         INSERT INTO daily_rank_analytics VALUES ('2026-09-25', 'app1');
@@ -105,12 +113,14 @@ def test_apply_retention_cleans_analytics_and_canonical(tmp_path: Path):
     summary = service.apply_retention()
 
     assert summary["status"] == "success"
-    assert summary["deleted_daily_canonical"] == 1
+    assert summary["deleted_daily_canonical"] == 2
     assert summary["deleted_daily_analytics"] == 1
 
     conn = sqlite3.connect(db_file)
     canon_dates = [r[0] for r in conn.execute("SELECT date FROM daily_canonical_snapshots").fetchall()]
     assert canon_dates == ["2026-09-25"]
+    plat_dates = [r[0] for r in conn.execute("SELECT date FROM platform_canonical_snapshots").fetchall()]
+    assert plat_dates == ["2026-09-25"]
     an_dates = [r[0] for r in conn.execute("SELECT date FROM daily_rank_analytics").fetchall()]
     assert an_dates == ["2026-09-25"]
     conn.close()

@@ -134,6 +134,12 @@ class RetentionService:
                 ).fetchone()[0]
                 report.expired_daily_canonical_count = cnt
 
+            if "platform_canonical_snapshots" in tables:
+                cnt = conn.execute(
+                    "SELECT COUNT(*) FROM platform_canonical_snapshots WHERE date < ?", (cutoff_date,)
+                ).fetchone()[0]
+                report.expired_daily_canonical_count += cnt
+
             # 6. Closed runs
             if "runs" in tables:
                 run_rows = conn.execute(
@@ -271,6 +277,20 @@ class RetentionService:
                                 (cutoff_date,),
                             )
 
+                    # Delete platform canonical snapshots older than cutoff or referencing expired snapshots
+                    if "platform_canonical_snapshots" in tables:
+                        if report.expired_snapshot_ids:
+                            q_marks = ",".join("?" for _ in report.expired_snapshot_ids)
+                            conn.execute(
+                                f"DELETE FROM platform_canonical_snapshots WHERE date < ? OR snapshot_id IN ({q_marks})",
+                                [cutoff_date, *report.expired_snapshot_ids],
+                            )
+                        else:
+                            conn.execute(
+                                "DELETE FROM platform_canonical_snapshots WHERE date < ?",
+                                (cutoff_date,),
+                            )
+
                     # Delete daily rank analytics
                     if "daily_rank_analytics" in tables:
                         conn.execute(
@@ -300,6 +320,26 @@ class RetentionService:
                     # Delete expired request observations, market_runs, runs
                     if report.expired_run_ids:
                         r_marks = ",".join("?" for _ in report.expired_run_ids)
+                        if "one_time_collection_schedule" in tables:
+                            conn.execute(
+                                f"UPDATE one_time_collection_schedule SET run_id = NULL WHERE run_id IN ({r_marks})",
+                                report.expired_run_ids,
+                            )
+                        if "android_jobs" in tables:
+                            conn.execute(
+                                f"UPDATE android_jobs SET core_run_id = NULL WHERE core_run_id IN ({r_marks})",
+                                report.expired_run_ids,
+                            )
+                        if "collector_lock" in tables:
+                            conn.execute(
+                                f"DELETE FROM collector_lock WHERE run_id IN ({r_marks})",
+                                report.expired_run_ids,
+                            )
+                        if "survey_slots" in tables:
+                            conn.execute(
+                                f"UPDATE survey_slots SET run_id = NULL WHERE run_id IN ({r_marks})",
+                                report.expired_run_ids,
+                            )
                         if "request_observations" in tables:
                             conn.execute(
                                 f"DELETE FROM request_observations WHERE run_id IN ({r_marks})",
@@ -307,12 +347,12 @@ class RetentionService:
                             )
                         if "market_runs" in tables:
                             conn.execute(
-                                f"DELETE FROM market_runs WHERE run_id IN ({r_marks})",
+                                f"DELETE FROM market_runs WHERE run_id IN ({r_marks}) AND id NOT IN (SELECT market_run_id FROM snapshots)",
                                 report.expired_run_ids,
                             )
                         if "runs" in tables:
                             conn.execute(
-                                f"DELETE FROM runs WHERE id IN ({r_marks})",
+                                f"DELETE FROM runs WHERE id IN ({r_marks}) AND id NOT IN (SELECT run_id FROM market_runs)",
                                 report.expired_run_ids,
                             )
 
